@@ -39,7 +39,7 @@ function extensionOf(name: string): string {
   return dot === -1 ? "" : name.slice(dot).toLowerCase();
 }
 
-function firstHeading(markdown: string): string | undefined {
+export function firstHeading(markdown: string): string | undefined {
   return markdown.match(/^#{1,6}\s+(.+?)\s*#*\s*$/m)?.[1]?.trim() || undefined;
 }
 
