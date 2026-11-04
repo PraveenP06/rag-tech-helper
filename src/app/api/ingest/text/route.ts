@@ -1,3 +1,4 @@
+import { assertIngestAuthorized } from "@/lib/ingest/auth";
 import { createIngestDeps } from "@/lib/ingest/deps";
 import { IngestError } from "@/lib/ingest/errors";
 import { assertContentLength, ingestResponse } from "@/lib/ingest/http";
@@ -35,12 +36,14 @@ async function readRawDocument(request: Request): Promise<RawDocument> {
 }
 
 /**
+ * Requires `Authorization: Bearer <INGEST_API_KEY>`.
  * Ingestion method 1: direct upload.
  *   JSON:      { "title": "...", "content": "..." }
  *   Multipart: file=<.md|.markdown|.txt>, optional title
  */
 export async function POST(request: Request) {
   return ingestResponse(async () => {
+    assertIngestAuthorized(request);
     assertContentLength(request, MAX_BODY_BYTES);
     const raw = await readRawDocument(request);
     return ingestDocument(raw, createIngestDeps());

@@ -3,8 +3,10 @@ import type { IngestResult } from "./types";
 
 const STATUS_BY_KIND: Record<IngestErrorKind, number> = {
   validation: 400,
+  unauthorized: 401,
   too_large: 413,
   upstream: 502,
+  unavailable: 503,
 };
 
 /** Rejects early when the client declares a body larger than `maxBytes`. */
@@ -22,7 +24,8 @@ export async function ingestResponse(run: () => Promise<IngestResult>): Promise<
     return Response.json(result, { status: result.status === "ready" ? 201 : 200 });
   } catch (err) {
     if (err instanceof IngestError) {
-      return Response.json({ error: err.message }, { status: STATUS_BY_KIND[err.kind] });
+      const headers: HeadersInit = err.kind === "unauthorized" ? { "www-authenticate": "Bearer" } : {};
+      return Response.json({ error: err.message }, { status: STATUS_BY_KIND[err.kind], headers });
     }
     console.error("[ingest] unexpected error", err);
     return Response.json(

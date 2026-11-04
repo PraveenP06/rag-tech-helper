@@ -47,3 +47,18 @@ describe("ingestResponse", () => {
     log.mockRestore();
   });
 });
+
+describe("ingestResponse auth statuses", () => {
+  it("maps unauthorized to 401 and unavailable to 503", async () => {
+    const unauth = await ingestResponse(async () => {
+      throw new IngestError("Missing or invalid ingest API key", "unauthorized");
+    });
+    expect(unauth.status).toBe(401);
+    expect(unauth.headers.get("www-authenticate")).toBe("Bearer");
+
+    const off = await ingestResponse(async () => {
+      throw new IngestError("Ingestion is disabled", "unavailable");
+    });
+    expect(off.status).toBe(503);
+  });
+});

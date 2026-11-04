@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import type { IngestResult } from "@/lib/ingest/types";
 
 type Outcome = { kind: "result"; result: IngestResult } | { kind: "error"; message: string } | null;
@@ -12,6 +12,36 @@ const inputClass =
 const buttonClass =
   "rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors " +
   "hover:bg-[#383838] disabled:opacity-50 dark:hover:bg-[#ccc]";
+
+// The ingest API key lives in sessionStorage so it survives reloads but not the browser session.
+// useSyncExternalStore keeps the prerendered HTML (empty key) and the client in agreement.
+const KEY_STORAGE = "ingest-api-key";
+const KEY_EVENT = "ingest-api-key-change";
+
+function subscribeToKey(onChange: () => void) {
+  window.addEventListener(KEY_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(KEY_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+function useApiKey(): [string, (key: string) => void] {
+  const key = useSyncExternalStore(
+    subscribeToKey,
+    () => sessionStorage.getItem(KEY_STORAGE) ?? "",
+    () => "",
+  );
+  const setKey = (next: string) => {
+    sessionStorage.setItem(KEY_STORAGE, next);
+    window.dispatchEvent(new Event(KEY_EVENT));
+  };
+  return [key, setKey];
+}
+
+const authHeader = (apiKey: string): Record<string, string> =>
+  apiKey ? { authorization: `Bearer ${apiKey}` } : {};
 
 async function send(url: string, init: RequestInit): Promise<Outcome> {
   let res: Response;
@@ -65,7 +95,7 @@ function useSubmit() {
   return { pending, outcome, run };
 }
 
-function TextForm() {
+function TextForm({ apiKey }: { apiKey: string }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -77,11 +107,11 @@ function TextForm() {
       const form = new FormData();
       form.set("file", file);
       if (title.trim()) form.set("title", title);
-      return run("/api/ingest/text", { method: "POST", body: form });
+      return run("/api/ingest/text", { method: "POST", headers: authHeader(apiKey), body: form });
     }
     return run("/api/ingest/text", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeader(apiKey) },
       body: JSON.stringify({ title, content }),
     });
   };
@@ -124,7 +154,7 @@ function TextForm() {
   );
 }
 
-function UrlForm() {
+function UrlForm({ apiKey }: { apiKey: string }) {
   const [url, setUrl] = useState("");
   const { pending, outcome, run } = useSubmit();
 
@@ -132,7 +162,7 @@ function UrlForm() {
     event.preventDefault();
     return run("/api/ingest/url", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeader(apiKey) },
       body: JSON.stringify({ url }),
     });
   };
@@ -169,8 +199,23 @@ const TABS: Array<{ id: Tab; label: string }> = [
 
 export function IngestForms() {
   const [tab, setTab] = useState<Tab>("text");
+  const [apiKey, setApiKey] = useApiKey();
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <label htmlFor="ingest-api-key" className="text-sm font-medium">Ingest API key</label>
+        <input
+          id="ingest-api-key"
+          type="password"
+          autoComplete="off"
+          className={inputClass}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+        <p className="text-xs text-zinc-500">
+          The server&apos;s INGEST_API_KEY. Kept in this browser tab&apos;s session storage only.
+        </p>
+      </div>
       <div role="tablist" aria-label="Ingestion method" className="flex gap-2">
         {TABS.map(({ id, label }) => (
           <button
@@ -192,7 +237,7 @@ export function IngestForms() {
         ))}
       </div>
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === "text" ? <TextForm /> : <UrlForm />}
+        {tab === "text" ? <TextForm apiKey={apiKey} /> : <UrlForm apiKey={apiKey} />}
       </div>
     </div>
   );

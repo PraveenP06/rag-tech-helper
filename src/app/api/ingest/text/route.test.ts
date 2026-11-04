@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ingestDocument = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument }));
@@ -10,11 +10,20 @@ import { POST } from "./route";
 const ready = { status: "ready", documentId: "d1", title: "T", chunkCount: 2 };
 
 beforeEach(() => {
+  vi.stubEnv("INGEST_API_KEY", "test-key");
   ingestDocument.mockReset().mockResolvedValue(ready);
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 const post = (body: BodyInit, headers: Record<string, string> = {}) =>
-  POST(new Request("http://localhost/api/ingest/text", { method: "POST", body, headers }));
+  POST(
+    new Request("http://localhost/api/ingest/text", {
+      method: "POST",
+      body,
+      headers: { authorization: "Bearer test-key", ...headers },
+    }),
+  );
 
 describe("POST /api/ingest/text", () => {
   it("ingests pasted text sent as JSON", async () => {
@@ -65,5 +74,22 @@ describe("POST /api/ingest/text", () => {
       "content-length": String(10 * 1024 * 1024),
     });
     expect(res.status).toBe(413);
+  });
+
+  it("rejects requests without a valid key before reading the body", async () => {
+    const body = JSON.stringify({ title: "Note", content: "Hello" });
+    const json = { "content-type": "application/json" };
+    expect((await post(body, { ...json, authorization: "" })).status).toBe(401);
+    expect((await post(body, { ...json, authorization: "Bearer nope" })).status).toBe(401);
+    expect(ingestDocument).not.toHaveBeenCalled();
+  });
+
+  it("is disabled (503) when the server has no INGEST_API_KEY", async () => {
+    vi.stubEnv("INGEST_API_KEY", "");
+    const res = await post(JSON.stringify({ title: "Note", content: "Hello" }), {
+      "content-type": "application/json",
+    });
+    expect(res.status).toBe(503);
+    expect(ingestDocument).not.toHaveBeenCalled();
   });
 });

@@ -31,6 +31,8 @@ Content gets into the knowledge base in two ways. Both feed the same pipeline: *
 
 There's also a developer page at [`/ingest`](http://localhost:3000/ingest) with a form for each method.
 
+Both endpoints require `Authorization: Bearer <INGEST_API_KEY>`. The `/ingest` page has a field for the key and keeps it in session storage. If `INGEST_API_KEY` isn't set on the server, the endpoints return `503` instead of accepting requests without a key.
+
 ### Setup
 
 1. **Env vars:** `cp .env.example .env.local` and fill in the Pinecone and Supabase keys, plus the Gemini key that chat uses. The Supabase **service role** key is used server-side only. Never prefix it with `NEXT_PUBLIC_`.
@@ -40,16 +42,21 @@ There's also a developer page at [`/ingest`](http://localhost:3000/ingest) with 
 ### Examples
 
 ```bash
+export INGEST_API_KEY=...   # same value as in .env.local
+
 # Pasted text
 curl -X POST http://localhost:3000/api/ingest/text \
+  -H "authorization: Bearer $INGEST_API_KEY" \
   -H 'content-type: application/json' \
   -d '{"title":"Server Actions notes","content":"Server Actions are async functions..."}'
 
 # File upload
-curl -X POST http://localhost:3000/api/ingest/text -F file=@notes.md
+curl -X POST http://localhost:3000/api/ingest/text \
+  -H "authorization: Bearer $INGEST_API_KEY" -F file=@notes.md
 
 # Web page
 curl -X POST http://localhost:3000/api/ingest/url \
+  -H "authorization: Bearer $INGEST_API_KEY" \
   -H 'content-type: application/json' \
   -d '{"url":"https://nextjs.org/docs/app/getting-started/route-handlers"}'
 ```
@@ -57,7 +64,7 @@ curl -X POST http://localhost:3000/api/ingest/url \
 Responses:
 - `201` `{ status: "ready", documentId, title, chunkCount }` for new content.
 - `200` `{ status: "duplicate", documentId, title, existingStatus }` when the content is already stored.
-- Errors are `{ error }` with status `400` (bad input), `413` (too large), `502` (the page or Pinecone failed) or `500`.
+- Errors are `{ error }` with status `400` (bad input), `401` (missing or wrong key), `413` (too large), `502` (the page or Pinecone failed), `503` (`INGEST_API_KEY` not configured) or `500`.
 
 A document that failed earlier is retried under the same id the next time it's submitted.
 
@@ -65,7 +72,7 @@ Each chunk is stored in Pinecone as `{ _id: "<documentId>#<chunkIndex>", chunk_t
 
 ### Notes and limits
 
-- The ingest endpoints have **no authentication** yet. Run them locally only, or put them behind auth before deploying.
+- The ingest key is a single shared secret, not per-user accounts. Rotate it by changing `INGEST_API_KEY`.
 - The scraper refuses `localhost` and private or link-local addresses, and checks them again on every redirect. It fetches one page, with no crawling and no JavaScript rendering.
 - PDF and DOCX aren't supported yet.
 - **Adding a method:** write a `src/lib/ingest/sources/<name>.ts` that returns a `RawDocument`, plus a route that passes it to `ingestDocument`.
