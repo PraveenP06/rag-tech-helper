@@ -1,8 +1,9 @@
 /**
  * `validation`: the caller sent something we can't ingest (HTTP 400).
+ * `too_large`: the request or document exceeds a size limit (HTTP 413).
  * `upstream`: a remote site or service (page fetch, Gemini, Pinecone) failed (HTTP 502).
  */
-export type IngestErrorKind = "validation" | "upstream";
+export type IngestErrorKind = "validation" | "too_large" | "upstream";
 
 export class IngestError extends Error {
   constructor(
