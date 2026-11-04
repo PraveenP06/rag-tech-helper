@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { createDocumentRepo } from "./document-repo";
+import { createDocumentRepo, findDocumentById } from "./document-repo";
 
 type Result = { data: unknown; error: { message: string; code?: string } | null };
 
@@ -52,11 +52,24 @@ describe("createDocumentRepo", () => {
     const { client, calls } = fakeSupabase({ data: { id: "new" }, error: null });
     const repo = createDocumentRepo(client);
     await expect(
-      repo.createPending({ sourceType: "url", sourceRef: "https://x.dev", title: "X", contentHash: "h" }),
+      repo.createPending({
+        sourceType: "url",
+        sourceRef: "https://x.dev",
+        title: "X",
+        contentHash: "h",
+        content: "Body text",
+      }),
     ).resolves.toEqual({ id: "new" });
     expect(calls).toContainEqual([
       "insert",
-      { source_type: "url", source_ref: "https://x.dev", title: "X", content_hash: "h", status: "pending" },
+      {
+        source_type: "url",
+        source_ref: "https://x.dev",
+        title: "X",
+        content_hash: "h",
+        content: "Body text",
+        status: "pending",
+      },
     ]);
   });
 
@@ -91,5 +104,43 @@ describe("createDocumentRepo", () => {
     await expect(createDocumentRepo(client).findByHash("h")).rejects.toThrow(
       /relation does not exist/,
     );
+  });
+});
+
+describe("findDocumentById", () => {
+  const id = "868d1b2a-a7e1-4104-8a21-625be9cd1de9";
+
+  it("returns a ready document with its content", async () => {
+    const row = {
+      id,
+      title: "Alarm guide",
+      source_type: "upload",
+      source_ref: "alarm.md",
+      content: "Open the Clock app.",
+      status: "ready",
+      created_at: "2026-11-05T10:00:00Z",
+    };
+    const { client, calls } = fakeSupabase({ data: row, error: null });
+    await expect(findDocumentById(client, id)).resolves.toEqual({
+      id,
+      title: "Alarm guide",
+      sourceType: "upload",
+      sourceRef: "alarm.md",
+      content: "Open the Clock app.",
+      createdAt: "2026-11-05T10:00:00Z",
+    });
+    expect(calls).toContainEqual(["eq", "id", id]);
+    expect(calls).toContainEqual(["eq", "status", "ready"]);
+  });
+
+  it("returns null when nothing matches", async () => {
+    const { client } = fakeSupabase({ data: null, error: null });
+    await expect(findDocumentById(client, id)).resolves.toBeNull();
+  });
+
+  it("returns null for ids that are not UUIDs without querying", async () => {
+    const { client, calls } = fakeSupabase({ data: null, error: null });
+    await expect(findDocumentById(client, "not-a-uuid")).resolves.toBeNull();
+    expect(calls).toEqual([]);
   });
 });

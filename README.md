@@ -37,7 +37,7 @@ Both endpoints require `Authorization: Bearer <INGEST_API_KEY>`. The `/ingest` p
 
 1. **Env vars:** `cp .env.example .env.local` and fill in the Pinecone and Supabase keys, plus the Gemini key that chat uses. The Supabase **service role** key is used server-side only. Never prefix it with `NEXT_PUBLIC_`.
 2. **Pinecone:** use an index with **integrated embedding on a `chunk_text` field**, the same index `/api/chat` reads, and put its name in `PINECONE_INDEX`. Chunks go into the default namespace.
-3. **Supabase:** apply `supabase/migrations/20261104000000_create_documents.sql`, either with `supabase db push` or by pasting it into the SQL editor. It creates the `documents` table with RLS enabled and no policies, so only the service role can read or write it.
+3. **Supabase:** apply the files in `supabase/migrations/` in order, either with `supabase db push` or by pasting each into the SQL editor. They create the `documents` table (RLS enabled with no policies, so only the service role can read or write it) and add the column that holds each document's text.
 
 ### Examples
 
@@ -68,7 +68,7 @@ Responses:
 
 A document that failed earlier is retried under the same id the next time it's submitted.
 
-Each chunk is stored in Pinecone as `{ _id: "<documentId>#<chunkIndex>", chunk_text, title, source_url, document_id }`, with `source_url` left empty for uploads. These field names are what `src/lib/rag/pinecone-retriever.ts` reads back, and `src/lib/ingest/retriever-contract.test.ts` checks that the two stay in sync.
+Each chunk is stored in Pinecone as `{ _id: "<documentId>#<chunkIndex>", chunk_text, title, source_url, document_id }`, `source_url` is the page URL for scraped documents. For uploads and pasted text it's the app's own `/documents/<documentId>` page, a relative link that shows the stored text. These field names are what `src/lib/rag/pinecone-retriever.ts` reads back, and `src/lib/ingest/retriever-contract.test.ts` checks that the two stay in sync.
 
 ### Notes and limits
 

@@ -3,6 +3,9 @@ import { IngestError, errorMessage } from "./errors";
 import { contentHash } from "./hash";
 import type { ChunkDocument, IngestDeps, IngestResult, RawDocument } from "./types";
 
+/** The app page that shows a stored document; cited by chat for uploads, which have no URL. */
+export const documentPath = (documentId: string) => `/documents/${documentId}`;
+
 async function upstream<T>(step: string, fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -44,11 +47,12 @@ export async function ingestDocument(raw: RawDocument, deps: IngestDeps): Promis
       sourceRef: raw.sourceRef,
       title: raw.title,
       contentHash: hash,
+      content: raw.content,
     }));
   }
 
   try {
-    const sourceUrl = raw.sourceType === "url" ? raw.sourceRef : "";
+    const sourceUrl = raw.sourceType === "url" ? raw.sourceRef : documentPath(documentId);
     const records: ChunkDocument[] = chunks.map((text, chunkIndex) => ({
       _id: `${documentId}#${chunkIndex}`,
       chunk_text: text,

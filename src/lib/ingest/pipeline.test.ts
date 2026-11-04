@@ -39,6 +39,7 @@ describe("ingestDocument", () => {
       sourceRef: "notes.md",
       title: "Notes",
       contentHash: contentHash(raw.content),
+      content: raw.content,
     });
     const records = deps.upsertChunks.mock.calls[0][0];
     expect(records.length).toBeGreaterThan(1);
@@ -47,7 +48,8 @@ describe("ingestDocument", () => {
       _id: "doc-1#1",
       chunk_text: expect.stringContaining("Fact"),
       title: "Notes",
-      source_url: "",
+      // Uploads have no web address, so they cite the app's own document page.
+      source_url: "/documents/doc-1",
       document_id: "doc-1",
     });
     const chunks = records.map((r) => r.chunk_text);

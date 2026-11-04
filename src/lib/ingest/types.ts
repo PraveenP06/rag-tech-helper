@@ -29,7 +29,7 @@ export interface ChunkDocument {
   _id: string;
   chunk_text: string;
   title: string;
-  /** Page URL for scraped documents; empty for uploads. */
+  /** Page URL for scraped documents; the app's `/documents/<id>` page for uploads. */
   source_url: string;
   document_id: string;
 }
@@ -41,6 +41,7 @@ export interface DocumentRepo {
     sourceRef: string;
     title: string;
     contentHash: string;
+    content: string;
   }): Promise<{ id: string }>;
   /** Puts a previously failed document back into `pending` before a retry. */
   markPending(id: string): Promise<void>;
@@ -59,3 +60,13 @@ export interface IngestDeps {
 export type IngestResult =
   | { status: "ready"; documentId: string; title: string; chunkCount: number }
   | { status: "duplicate"; documentId: string; title: string; existingStatus: DocumentStatus };
+
+/** A ready document as shown on its `/documents/<id>` page. */
+export interface ViewableDocument {
+  id: string;
+  title: string;
+  sourceType: SourceType;
+  sourceRef: string;
+  content: string;
+  createdAt: string;
+}
