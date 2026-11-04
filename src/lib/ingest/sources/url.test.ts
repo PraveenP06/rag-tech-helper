@@ -49,6 +49,50 @@ describe("extractReadableText", () => {
     }
   });
 
+  it("drops unlabeled breadcrumb rows made only of links (nextjs.org docs markup)", () => {
+    const { text } = extractReadableText(`<main><article>
+      <div class="flex items-center gap-1.5 text-sm"><a href="/docs/app">App Router</a><svg viewBox="0 0 16 16"><path d="m5.5 1.94"></path></svg><a href="/docs/app/getting-started">Getting Started</a></div>
+      <h1>Route Handlers</h1>
+      <p>Route Handlers let you create custom request handlers.</p>
+    </article></main>`);
+    expect(text).not.toMatch(/App Router|Getting Started/);
+    expect(text.startsWith("# Route Handlers")).toBe(true);
+  });
+
+  it("drops elements labelled as breadcrumbs", () => {
+    const { text } = extractReadableText(`<main>
+      <ol class="Breadcrumbs_list"><li><a href="/">Home</a></li><li>Guides</li></ol>
+      <div aria-label="Breadcrumb">Docs / Guides</div>
+      <p>Actual content.</p>
+    </main>`);
+    expect(text).toBe("Actual content.");
+  });
+
+  it("keeps text from running together where an icon or other removed element sat between words", () => {
+    const { text } = extractReadableText(
+      "<main><p>Press<svg><path/></svg>Save<button>Copy</button>then<script>x</script>close.</p></main>",
+    );
+    expect(text).toBe("Press Save then close.");
+  });
+
+  it("keeps prose with links and lists that are mostly text", () => {
+    const { text } = extractReadableText(`<main>
+      <p>Read the <a href="/a">routing guide</a> and the <a href="/b">layouts guide</a> before you start building pages.</p>
+      <ul><li><a href="/x">Pages</a> are UI that is unique to a route.</li><li><a href="/y">Layouts</a> are UI shared between routes.</li></ul>
+    </main>`);
+    expect(text).toContain("Read the routing guide and the layouts guide before you start building pages.");
+    expect(text).toContain("- Pages are UI that is unique to a route.");
+    expect(text).toContain("- Layouts are UI shared between routes.");
+  });
+
+  it("drops short link-only lists such as 'related pages' blocks", () => {
+    const { text } = extractReadableText(`<main>
+      <p>Main explanation of the feature goes here.</p>
+      <ul><li><a href="/1">Caching</a></li><li><a href="/2">Revalidating</a></li><li><a href="/3">Error handling</a></li></ul>
+    </main>`);
+    expect(text).toBe("Main explanation of the feature goes here.");
+  });
+
   it("falls back to the first h1 for the title and to body when there is no main", () => {
     const { title, text } = extractReadableText(
       "<html><body><h1>Install</h1><p>Run npm install.</p></body></html>",

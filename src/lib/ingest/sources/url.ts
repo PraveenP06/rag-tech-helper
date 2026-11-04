@@ -133,7 +133,15 @@ const REMOVE = [
   "nav", "aside", "form", "button", "dialog",
   "[role=navigation]", "[role=banner]", "[role=contentinfo]", "[role=search]",
   "[hidden]", "[aria-hidden=true]",
+  "[aria-label*=breadcrumb i]", "[class*=breadcrumb i]", "[id*=breadcrumb i]",
 ].join(", ");
+
+/** Blocks shorter than this that are almost entirely link text are navigation, not content. */
+const LINK_BLOCK_MAX_CHARS = 300;
+const LINK_BLOCK_MIN_LINKS = 2;
+const LINK_BLOCK_DENSITY = 0.9;
+
+const nonSpaceLength = (text: string) => text.replace(/\s+/g, "").length;
 
 const BLOCKS = new Set([
   "address", "article", "blockquote", "body", "dd", "details", "div", "dl", "dt", "figcaption",
@@ -201,16 +209,32 @@ export function extractReadableText(html: string): { title: string; text: string
   const $ = cheerio.load(html);
   const docTitle = $("title").first().text().replace(/\s+/g, " ").trim();
 
-  $(REMOVE).remove();
+  // Replace rather than delete, so words on either side of an icon or button don't merge.
+  $(REMOVE).replaceWith(" ");
   // Site-wide headers/footers are noise; ones inside the article (bylines, titles) are kept.
   $("header, footer")
     .filter((_, el) => $(el).closest("main, article").length === 0)
-    .remove();
+    .replaceWith(" ");
 
-  const candidate = ["main", "article", "[role=main]", "body"]
-    .map((selector) => $(selector).first())
-    .find((el) => el.length > 0);
-  const rootNode = (candidate ?? $.root()).get(0) as unknown as DomNode;
+  const root =
+    ["main", "article", "[role=main]", "body"]
+      .map((selector) => $(selector).first())
+      .find((el) => el.length > 0) ?? $.root();
+
+  // Unlabeled breadcrumbs, "related pages" lists and similar link rows.
+  root
+    .find("div, p, ul, ol, section")
+    .filter((_, el) => {
+      const block = $(el);
+      const links = block.find("a");
+      if (links.length < LINK_BLOCK_MIN_LINKS) return false;
+      const textLength = nonSpaceLength(block.text());
+      if (textLength === 0 || textLength > LINK_BLOCK_MAX_CHARS) return false;
+      return nonSpaceLength(links.text()) / textLength >= LINK_BLOCK_DENSITY;
+    })
+    .replaceWith(" ");
+
+  const rootNode = root.get(0) as unknown as DomNode;
 
   const h1 = $("h1").first().text().replace(/\s+/g, " ").trim();
   const out: string[] = [];
