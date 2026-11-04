@@ -16,6 +16,5 @@ describe("service clients", () => {
     const clients = await import("./clients");
     expect(() => clients.getPineconeIndex()).toThrow(/PINECONE_API_KEY/);
     expect(() => clients.getSupabase()).toThrow(/Missing or invalid environment variables/);
-    expect(() => clients.getEmbeddingModel()).toThrow(/Missing or invalid environment variables/);
   });
 });

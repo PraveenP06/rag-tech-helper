@@ -19,21 +19,19 @@ export interface StoredDocument {
   status: DocumentStatus;
 }
 
-export interface ChunkMetadata {
-  documentId: string;
-  sourceType: SourceType;
-  sourceRef: string;
+/**
+ * One chunk as stored in the Pinecone index. The index embeds `chunk_text` itself
+ * (integrated embedding), and these field names are what src/lib/rag/pinecone-retriever.ts
+ * reads back, so keep the two in sync.
+ */
+export interface ChunkDocument {
+  /** `${documentId}#${chunkIndex}` */
+  _id: string;
+  chunk_text: string;
   title: string;
-  chunkIndex: number;
-  text: string;
-  // Pinecone's RecordMetadata requires an index signature.
-  [key: string]: string | number;
-}
-
-export interface VectorRecord {
-  id: string;
-  values: number[];
-  metadata: ChunkMetadata;
+  /** Page URL for scraped documents; empty for uploads. */
+  source_url: string;
+  document_id: string;
 }
 
 export interface DocumentRepo {
@@ -52,8 +50,7 @@ export interface DocumentRepo {
 
 export interface IngestDeps {
   docs: DocumentRepo;
-  embed(texts: string[]): Promise<number[][]>;
-  upsertVectors(records: VectorRecord[]): Promise<void>;
+  upsertChunks(chunks: ChunkDocument[]): Promise<void>;
   chunkOptions?: ChunkOptions;
 }
 

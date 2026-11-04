@@ -16,7 +16,7 @@ export default function IngestPage() {
           </h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             Paste text, upload a markdown or text file, or point at a web page. Each document is split
-            into chunks, embedded with Gemini and stored in Pinecone.
+            into chunks and stored in Pinecone, which embeds them for search.
           </p>
         </header>
         <IngestForms />

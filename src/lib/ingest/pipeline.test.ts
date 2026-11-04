@@ -22,15 +22,14 @@ function fakeDeps(existing: StoredDocument | null = null) {
   };
   const deps = {
     docs,
-    embed: vi.fn(async (texts: string[]) => texts.map((_, i) => [i, 0.5, 1])),
-    upsertVectors: vi.fn<IngestDeps["upsertVectors"]>().mockResolvedValue(),
+    upsertChunks: vi.fn<IngestDeps["upsertChunks"]>().mockResolvedValue(),
     chunkOptions: { maxChars: 200, overlap: 20 },
   };
   return deps;
 }
 
 describe("ingestDocument", () => {
-  it("chunks, embeds, upserts and marks the document ready", async () => {
+  it("chunks, upserts and marks the document ready", async () => {
     const deps = fakeDeps();
     const result = await ingestDocument(raw, deps);
 
@@ -40,23 +39,17 @@ describe("ingestDocument", () => {
       title: "Notes",
       contentHash: contentHash(raw.content),
     });
-    const chunks = deps.embed.mock.calls[0][0];
-    expect(chunks.length).toBeGreaterThan(1);
-
-    const records = deps.upsertVectors.mock.calls[0][0];
-    expect(records).toHaveLength(chunks.length);
+    const records = deps.upsertChunks.mock.calls[0][0];
+    expect(records.length).toBeGreaterThan(1);
+    // Field names match what src/lib/rag/pinecone-retriever.ts reads back.
     expect(records[1]).toEqual({
-      id: "doc-1#1",
-      values: [1, 0.5, 1],
-      metadata: {
-        documentId: "doc-1",
-        sourceType: "upload",
-        sourceRef: "notes.md",
-        title: "Notes",
-        chunkIndex: 1,
-        text: chunks[1],
-      },
+      _id: "doc-1#1",
+      chunk_text: expect.stringContaining("Fact"),
+      title: "Notes",
+      source_url: "",
+      document_id: "doc-1",
     });
+    const chunks = records.map((r) => r.chunk_text);
     expect(deps.docs.markReady).toHaveBeenCalledWith("doc-1", chunks.length);
     expect(result).toEqual({
       status: "ready",
@@ -76,8 +69,7 @@ describe("ingestDocument", () => {
       existingStatus: "ready",
     });
     expect(deps.docs.createPending).not.toHaveBeenCalled();
-    expect(deps.embed).not.toHaveBeenCalled();
-    expect(deps.upsertVectors).not.toHaveBeenCalled();
+    expect(deps.upsertChunks).not.toHaveBeenCalled();
   });
 
   it("retries a previously failed document under the same id", async () => {
@@ -85,7 +77,7 @@ describe("ingestDocument", () => {
     const result = await ingestDocument(raw, deps);
     expect(deps.docs.createPending).not.toHaveBeenCalled();
     expect(deps.docs.markPending).toHaveBeenCalledWith("old");
-    expect(deps.upsertVectors.mock.calls[0][0][0].id).toBe("old#0");
+    expect(deps.upsertChunks.mock.calls[0][0][0]._id).toBe("old#0");
     expect(result).toMatchObject({ status: "ready", documentId: "old" });
   });
 
@@ -97,28 +89,22 @@ describe("ingestDocument", () => {
     expect(deps.docs.findByHash).not.toHaveBeenCalled();
   });
 
-  it("marks the document failed and reports an upstream error when embedding fails", async () => {
+  it("sets source_url to the page URL for scraped documents", async () => {
     const deps = fakeDeps();
-    deps.embed.mockRejectedValueOnce(new Error("quota exceeded"));
+    await ingestDocument(
+      { ...raw, sourceType: "url", sourceRef: "https://nextjs.org/docs" },
+      deps,
+    );
+    expect(deps.upsertChunks.mock.calls[0][0][0].source_url).toBe("https://nextjs.org/docs");
+  });
+
+  it("marks the document failed and reports an upstream error when the Pinecone upsert fails", async () => {
+    const deps = fakeDeps();
+    deps.upsertChunks.mockRejectedValueOnce(new Error("pinecone down"));
     const err = await ingestDocument(raw, deps).catch((e) => e);
     expect(err).toBeInstanceOf(IngestError);
-    expect(err).toMatchObject({ kind: "upstream", message: expect.stringMatching(/quota exceeded/) });
-    expect(deps.docs.markFailed).toHaveBeenCalledWith("doc-1", expect.stringMatching(/quota/));
-    expect(deps.upsertVectors).not.toHaveBeenCalled();
-    expect(deps.docs.markReady).not.toHaveBeenCalled();
-  });
-
-  it("fails when the embedder returns the wrong number of vectors", async () => {
-    const deps = fakeDeps();
-    deps.embed.mockResolvedValueOnce([[1, 2, 3]]);
-    await expect(ingestDocument(raw, deps)).rejects.toMatchObject({ kind: "upstream" });
-    expect(deps.docs.markFailed).toHaveBeenCalled();
-  });
-
-  it("marks the document failed when the vector upsert fails", async () => {
-    const deps = fakeDeps();
-    deps.upsertVectors.mockRejectedValueOnce(new Error("pinecone down"));
-    await expect(ingestDocument(raw, deps)).rejects.toMatchObject({ kind: "upstream" });
+    expect(err).toMatchObject({ kind: "upstream", message: expect.stringMatching(/pinecone down/) });
     expect(deps.docs.markFailed).toHaveBeenCalledWith("doc-1", expect.stringMatching(/pinecone down/));
+    expect(deps.docs.markReady).not.toHaveBeenCalled();
   });
 });

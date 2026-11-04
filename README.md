@@ -22,7 +22,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Knowledge base ingestion
 
-Content gets into the knowledge base in two ways. Both feed the same pipeline: **split into chunks → embed with Gemini (`gemini-embedding-001`, 768 dims) → upsert to Pinecone → record the document in Supabase**. Content that was already ingested (same text, ignoring whitespace) is detected by hash and skipped.
+Content gets into the knowledge base in two ways. Both feed the same pipeline: **split into chunks → upsert to Pinecone, which embeds the text itself → record the document in Supabase**. The chat endpoint (`POST /api/chat`) searches the same index. Content that was already ingested (same text, ignoring whitespace) is detected by hash and skipped.
 
 | Method | Endpoint | Accepts |
 | --- | --- | --- |
@@ -33,8 +33,8 @@ There's also a developer page at [`/ingest`](http://localhost:3000/ingest) with 
 
 ### Setup
 
-1. **Env vars:** `cp .env.example .env.local` and fill in the Gemini, Pinecone and Supabase keys. The Supabase **service role** key is used server-side only. Never prefix it with `NEXT_PUBLIC_`.
-2. **Pinecone:** create a dense index with **dimension 768** and metric **cosine**, then put its name in `PINECONE_INDEX`. Vectors are written to `PINECONE_NAMESPACE` (default `default`).
+1. **Env vars:** `cp .env.example .env.local` and fill in the Pinecone and Supabase keys, plus the Gemini key that chat uses. The Supabase **service role** key is used server-side only. Never prefix it with `NEXT_PUBLIC_`.
+2. **Pinecone:** use an index with **integrated embedding on a `chunk_text` field**, the same index `/api/chat` reads, and put its name in `PINECONE_INDEX`. Chunks go into the default namespace.
 3. **Supabase:** apply `supabase/migrations/20261104000000_create_documents.sql`, either with `supabase db push` or by pasting it into the SQL editor. It creates the `documents` table with RLS enabled and no policies, so only the service role can read or write it.
 
 ### Examples
@@ -57,11 +57,11 @@ curl -X POST http://localhost:3000/api/ingest/url \
 Responses:
 - `201` `{ status: "ready", documentId, title, chunkCount }` for new content.
 - `200` `{ status: "duplicate", documentId, title, existingStatus }` when the content is already stored.
-- Errors are `{ error }` with status `400` (bad input), `413` (too large), `502` (the page, Gemini or Pinecone failed) or `500`.
+- Errors are `{ error }` with status `400` (bad input), `413` (too large), `502` (the page or Pinecone failed) or `500`.
 
 A document that failed earlier is retried under the same id the next time it's submitted.
 
-Each Pinecone vector has the id `<documentId>#<chunkIndex>` and metadata `{ documentId, sourceType, sourceRef, title, chunkIndex, text }`.
+Each chunk is stored in Pinecone as `{ _id: "<documentId>#<chunkIndex>", chunk_text, title, source_url, document_id }`, with `source_url` left empty for uploads. These field names are what `src/lib/rag/pinecone-retriever.ts` reads back, and `src/lib/ingest/retriever-contract.test.ts` checks that the two stay in sync.
 
 ### Notes and limits
 

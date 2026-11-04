@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { getEnv } from "./env";
 
 const valid = {
-  GOOGLE_GENERATIVE_AI_API_KEY: "g-key",
   PINECONE_API_KEY: "p-key",
   PINECONE_INDEX: "tech-helper",
   SUPABASE_URL: "https://abc.supabase.co",
@@ -11,19 +10,17 @@ const valid = {
 };
 
 describe("getEnv", () => {
-  it("returns parsed values and defaults the namespace", () => {
-    const env = getEnv(valid);
-    expect(env.PINECONE_INDEX).toBe("tech-helper");
-    expect(env.PINECONE_NAMESPACE).toBe("default");
+  it("returns parsed values", () => {
+    expect(getEnv(valid)).toEqual(valid);
   });
 
-  it("keeps an explicit namespace", () => {
-    expect(getEnv({ ...valid, PINECONE_NAMESPACE: "docs" }).PINECONE_NAMESPACE).toBe("docs");
+  it("does not need the Gemini key (Pinecone embeds ingested text itself)", () => {
+    expect(() => getEnv(valid)).not.toThrow();
   });
 
   it("names every missing variable in the error", () => {
     expect(() => getEnv({ PINECONE_INDEX: "x" })).toThrow(
-      /GOOGLE_GENERATIVE_AI_API_KEY[\s\S]*PINECONE_API_KEY[\s\S]*SUPABASE_URL[\s\S]*SUPABASE_SERVICE_ROLE_KEY/,
+      /PINECONE_API_KEY[\s\S]*SUPABASE_URL[\s\S]*SUPABASE_SERVICE_ROLE_KEY/,
     );
   });
 

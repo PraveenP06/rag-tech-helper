@@ -1,7 +1,7 @@
 import { chunkText } from "./chunk";
 import { IngestError, errorMessage } from "./errors";
 import { contentHash } from "./hash";
-import type { IngestDeps, IngestResult, RawDocument, VectorRecord } from "./types";
+import type { ChunkDocument, IngestDeps, IngestResult, RawDocument } from "./types";
 
 async function upstream<T>(step: string, fn: () => Promise<T>): Promise<T> {
   try {
@@ -14,7 +14,8 @@ async function upstream<T>(step: string, fn: () => Promise<T>): Promise<T> {
 
 /**
  * The one pipeline every ingestion method feeds into:
- * dedupe by content hash, then chunk, embed, upsert, and record the document's status.
+ * dedupe by content hash, then chunk, upsert to Pinecone (which embeds the text), and
+ * record the document's status.
  */
 export async function ingestDocument(raw: RawDocument, deps: IngestDeps): Promise<IngestResult> {
   const chunks = chunkText(raw.content, deps.chunkOptions);
@@ -47,27 +48,15 @@ export async function ingestDocument(raw: RawDocument, deps: IngestDeps): Promis
   }
 
   try {
-    const vectors = await upstream("Embedding", () => deps.embed(chunks));
-    if (vectors.length !== chunks.length) {
-      throw new IngestError(
-        `Embedding failed: expected ${chunks.length} vectors, got ${vectors.length}`,
-        "upstream",
-      );
-    }
-
-    const records: VectorRecord[] = chunks.map((text, chunkIndex) => ({
-      id: `${documentId}#${chunkIndex}`,
-      values: vectors[chunkIndex],
-      metadata: {
-        documentId,
-        sourceType: raw.sourceType,
-        sourceRef: raw.sourceRef,
-        title: raw.title,
-        chunkIndex,
-        text,
-      },
+    const sourceUrl = raw.sourceType === "url" ? raw.sourceRef : "";
+    const records: ChunkDocument[] = chunks.map((text, chunkIndex) => ({
+      _id: `${documentId}#${chunkIndex}`,
+      chunk_text: text,
+      title: raw.title,
+      source_url: sourceUrl,
+      document_id: documentId,
     }));
-    await upstream("Vector upsert", () => deps.upsertVectors(records));
+    await upstream("Pinecone upsert", () => deps.upsertChunks(records));
 
     await deps.docs.markReady(documentId, chunks.length);
     return { status: "ready", documentId, title: raw.title, chunkCount: chunks.length };

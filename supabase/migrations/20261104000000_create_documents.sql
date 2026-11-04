@@ -1,5 +1,5 @@
--- One row per ingested source document. Chunk vectors live in Pinecone,
--- keyed by `${id}#${chunkIndex}` with `documentId` in their metadata.
+-- One row per ingested source document. Its chunks live in Pinecone with
+-- `_id` = `${id}#${chunkIndex}` and `document_id` = this row's id.
 create table if not exists public.documents (
   id            uuid primary key default gen_random_uuid(),
   source_type   text not null check (source_type in ('upload', 'url')),
