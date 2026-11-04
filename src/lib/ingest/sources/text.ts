@@ -8,8 +8,8 @@ export const ALLOWED_EXTENSIONS = [".md", ".markdown", ".txt"] as const;
 const MAX_TITLE_CHARS = 200;
 
 const pastedTextSchema = z.object({
-  title: z.string().trim().min(1, "Title is required").max(MAX_TITLE_CHARS),
-  content: z.string().refine((s) => s.trim().length > 0, "Content is required"),
+  title: z.string({ error: "Title is required" }).trim().min(1, "Title is required").max(MAX_TITLE_CHARS),
+  content: z.string({ error: "Content is required" }).refine((s) => s.trim().length > 0, "Content is required"),
 });
 
 function assertSize(text: string, label: string) {

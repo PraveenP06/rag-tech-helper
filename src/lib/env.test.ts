@@ -27,6 +27,10 @@ describe("getEnv", () => {
     );
   });
 
+  it("says which variables are required when they are absent", () => {
+    expect(() => getEnv({})).toThrow("PINECONE_API_KEY: is required");
+  });
+
   it("treats empty strings as missing", () => {
     expect(() => getEnv({ ...valid, PINECONE_API_KEY: "" })).toThrow(/PINECONE_API_KEY/);
   });

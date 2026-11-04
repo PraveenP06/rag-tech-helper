@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-const required = z.string().trim().min(1, "is required");
+const required = z.string({ error: "is required" }).trim().min(1, "is required");
 
 const envSchema = z.object({
   GOOGLE_GENERATIVE_AI_API_KEY: required,
   PINECONE_API_KEY: required,
   PINECONE_INDEX: required,
   PINECONE_NAMESPACE: z.string().trim().min(1).default("default"),
-  SUPABASE_URL: z.url("must be a valid URL"),
+  SUPABASE_URL: z.url({ error: (issue) => (issue.input === undefined ? "is required" : "must be a valid URL") }),
   SUPABASE_SERVICE_ROLE_KEY: required,
 });
 

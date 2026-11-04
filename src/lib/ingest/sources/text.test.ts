@@ -13,6 +13,8 @@ describe("fromText", () => {
   });
 
   it("requires a title and non-blank content", () => {
+    expect(() => fromText({ content: "x" })).toThrow("Title is required");
+    expect(() => fromText({ title: "t" })).toThrow("Content is required");
     expect(() => fromText({ title: "", content: "x" })).toThrow(/title/i);
     expect(() => fromText({ title: "t", content: "   " })).toThrow(/content/i);
     expect(() => fromText(null)).toThrow();

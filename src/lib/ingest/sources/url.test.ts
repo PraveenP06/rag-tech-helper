@@ -152,6 +152,10 @@ describe("fromUrl", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("explains a missing url field", async () => {
+    await expect(fromUrl({}, options(vi.fn()))).rejects.toThrow("URL is required");
+  });
+
   it("reports non-2xx responses as upstream errors", async () => {
     const fetchImpl = vi.fn(async () => htmlResponse("nope", { status: 404 }));
     await expect(fromUrl({ url: "https://example.com/x" }, options(fetchImpl))).rejects.toMatchObject({

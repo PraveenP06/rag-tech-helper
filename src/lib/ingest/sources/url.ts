@@ -22,7 +22,7 @@ export interface UrlSourceOptions {
   maxBytes?: number;
 }
 
-const inputSchema = z.object({ url: z.string().trim().min(1, "URL is required") });
+const inputSchema = z.object({ url: z.string({ error: "URL is required" }).trim().min(1, "URL is required") });
 
 // ---------------------------------------------------------------------------
 // Address safety: never let a submitted URL reach localhost or a private network.
