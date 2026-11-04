@@ -19,9 +19,11 @@ type EnvSource = Record<string, string | undefined>;
  */
 export function getEnv(source: EnvSource = process.env): Env {
   // Treat empty strings as unset so they get the "is required" message.
-  const cleaned = Object.fromEntries(
+  const cleaned: EnvSource = Object.fromEntries(
     Object.entries(source).filter(([, value]) => value !== undefined && value !== ""),
   );
+  // Supabase's Next.js setup names the project URL NEXT_PUBLIC_SUPABASE_URL; accept either.
+  cleaned.SUPABASE_URL ??= cleaned.NEXT_PUBLIC_SUPABASE_URL;
   const result = envSchema.safeParse(cleaned);
   if (!result.success) {
     const problems = result.error.issues
