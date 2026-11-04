@@ -20,6 +20,56 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Knowledge base ingestion
+
+Content gets into the knowledge base in two ways. Both feed the same pipeline: **split into chunks → embed with Gemini (`gemini-embedding-001`, 768 dims) → upsert to Pinecone → record the document in Supabase**. Content that was already ingested (same text, ignoring whitespace) is detected by hash and skipped.
+
+| Method | Endpoint | Accepts |
+| --- | --- | --- |
+| Direct upload | `POST /api/ingest/text` | JSON `{ "title", "content" }`, or multipart `file` (`.md`, `.markdown`, `.txt`, ≤ 1 MB) with an optional `title` |
+| Web page scraping | `POST /api/ingest/url` | JSON `{ "url" }` for a single public `http(s)` page (HTML, plain text or markdown, ≤ 2 MB) |
+
+There's also a developer page at [`/ingest`](http://localhost:3000/ingest) with a form for each method.
+
+### Setup
+
+1. **Env vars:** `cp .env.example .env.local` and fill in the Gemini, Pinecone and Supabase keys. The Supabase **service role** key is used server-side only. Never prefix it with `NEXT_PUBLIC_`.
+2. **Pinecone:** create a dense index with **dimension 768** and metric **cosine**, then put its name in `PINECONE_INDEX`. Vectors are written to `PINECONE_NAMESPACE` (default `default`).
+3. **Supabase:** apply `supabase/migrations/20261104000000_create_documents.sql`, either with `supabase db push` or by pasting it into the SQL editor. It creates the `documents` table with RLS enabled and no policies, so only the service role can read or write it.
+
+### Examples
+
+```bash
+# Pasted text
+curl -X POST http://localhost:3000/api/ingest/text \
+  -H 'content-type: application/json' \
+  -d '{"title":"Server Actions notes","content":"Server Actions are async functions..."}'
+
+# File upload
+curl -X POST http://localhost:3000/api/ingest/text -F file=@notes.md
+
+# Web page
+curl -X POST http://localhost:3000/api/ingest/url \
+  -H 'content-type: application/json' \
+  -d '{"url":"https://nextjs.org/docs/app/getting-started/route-handlers"}'
+```
+
+Responses:
+- `201` `{ status: "ready", documentId, title, chunkCount }` for new content.
+- `200` `{ status: "duplicate", documentId, title, existingStatus }` when the content is already stored.
+- Errors are `{ error }` with status `400` (bad input), `413` (too large), `502` (the page, Gemini or Pinecone failed) or `500`.
+
+A document that failed earlier is retried under the same id the next time it's submitted.
+
+Each Pinecone vector has the id `<documentId>#<chunkIndex>` and metadata `{ documentId, sourceType, sourceRef, title, chunkIndex, text }`.
+
+### Notes and limits
+
+- The ingest endpoints have **no authentication** yet. Run them locally only, or put them behind auth before deploying.
+- The scraper refuses `localhost` and private or link-local addresses, and checks them again on every redirect. It fetches one page, with no crawling and no JavaScript rendering.
+- PDF and DOCX aren't supported yet.
+- **Adding a method:** write a `src/lib/ingest/sources/<name>.ts` that returns a `RawDocument`, plus a route that passes it to `ingestDocument`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
