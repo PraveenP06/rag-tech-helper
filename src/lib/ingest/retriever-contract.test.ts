@@ -29,6 +29,7 @@ describe("ingestion ↔ retrieval contract", () => {
       upsertChunks: async (chunks) => {
         written = chunks;
       },
+      deleteStaleChunks: async () => {},
     };
     await ingestDocument(
       {

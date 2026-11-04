@@ -57,6 +57,12 @@ export async function ingestDocument(raw: RawDocument, deps: IngestDeps): Promis
       document_id: documentId,
     }));
     await upstream("Pinecone upsert", () => deps.upsertChunks(records));
+    if (existing) {
+      // A retry may produce fewer chunks than the failed attempt wrote; drop the extras.
+      await upstream("Stale chunk cleanup", () =>
+        deps.deleteStaleChunks(documentId, records.length),
+      );
+    }
 
     await deps.docs.markReady(documentId, chunks.length);
     return { status: "ready", documentId, title: raw.title, chunkCount: chunks.length };

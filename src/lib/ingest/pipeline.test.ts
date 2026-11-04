@@ -23,6 +23,7 @@ function fakeDeps(existing: StoredDocument | null = null) {
   const deps = {
     docs,
     upsertChunks: vi.fn<IngestDeps["upsertChunks"]>().mockResolvedValue(),
+    deleteStaleChunks: vi.fn<IngestDeps["deleteStaleChunks"]>().mockResolvedValue(),
     chunkOptions: { maxChars: 200, overlap: 20 },
   };
   return deps;
@@ -51,6 +52,7 @@ describe("ingestDocument", () => {
     });
     const chunks = records.map((r) => r.chunk_text);
     expect(deps.docs.markReady).toHaveBeenCalledWith("doc-1", chunks.length);
+    expect(deps.deleteStaleChunks).not.toHaveBeenCalled();
     expect(result).toEqual({
       status: "ready",
       documentId: "doc-1",
@@ -79,6 +81,26 @@ describe("ingestDocument", () => {
     expect(deps.docs.markPending).toHaveBeenCalledWith("old");
     expect(deps.upsertChunks.mock.calls[0][0][0]._id).toBe("old#0");
     expect(result).toMatchObject({ status: "ready", documentId: "old" });
+  });
+
+  it("removes leftover chunks from the failed attempt after re-upserting", async () => {
+    const deps = fakeDeps({ id: "old", title: "Notes", status: "failed" });
+    const order: string[] = [];
+    deps.upsertChunks.mockImplementation(async () => void order.push("upsert"));
+    deps.deleteStaleChunks.mockImplementation(async () => void order.push("cleanup"));
+
+    await ingestDocument(raw, deps);
+    const count = deps.upsertChunks.mock.calls[0][0].length;
+    expect(deps.deleteStaleChunks).toHaveBeenCalledWith("old", count);
+    expect(order).toEqual(["upsert", "cleanup"]);
+  });
+
+  it("marks a retry failed when stale-chunk cleanup fails, so it can be retried again", async () => {
+    const deps = fakeDeps({ id: "old", title: "Notes", status: "failed" });
+    deps.deleteStaleChunks.mockRejectedValueOnce(new Error("list timed out"));
+    await expect(ingestDocument(raw, deps)).rejects.toMatchObject({ kind: "upstream" });
+    expect(deps.docs.markFailed).toHaveBeenCalledWith("old", expect.stringMatching(/list timed out/));
+    expect(deps.docs.markReady).not.toHaveBeenCalled();
   });
 
   it("rejects empty content as a validation error without touching storage", async () => {

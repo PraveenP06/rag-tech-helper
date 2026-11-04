@@ -51,6 +51,8 @@ export interface DocumentRepo {
 export interface IngestDeps {
   docs: DocumentRepo;
   upsertChunks(chunks: ChunkDocument[]): Promise<void>;
+  /** Removes chunks `${documentId}#${n}` with n >= keepCount left over from an earlier attempt. */
+  deleteStaleChunks(documentId: string, keepCount: number): Promise<void>;
   chunkOptions?: ChunkOptions;
 }
 
