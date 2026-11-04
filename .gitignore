@@ -49,3 +49,6 @@ AGENTS.md
 venv/
 .venv/
 .DS_Store
+
+# supabase cli local state
+supabase/.temp/
