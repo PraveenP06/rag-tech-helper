@@ -55,6 +55,11 @@ describe("removeBoilerplate", () => {
     expect(result.linesRemoved).toBe(2);
   });
 
+  it("keeps repeated callout labels like Warning or Good to know", () => {
+    const text = ["Warning", "Unplug first.", "Good to know:", "Tip A.", "Warning", "Keep it dry.", "Good to know:", "Tip B.", "Warning", "Wait.", "Good to know:", "Tip C."].join("\n\n");
+    expect(removeBoilerplate(text).text).toBe(text);
+  });
+
   it("never removes headings, list steps, table rows or code", () => {
     const section = (device: string) =>
       [`## ${device}`, "## Example", "1. Open Settings.", "| Wi-Fi | On |", "Run `ping 8.8.8.8`", "```\nreboot\n```"].join("\n\n");

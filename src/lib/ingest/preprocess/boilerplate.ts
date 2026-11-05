@@ -23,6 +23,10 @@ const DUPLICATE_MIN_CHARS = 40;
 const REPEATED_LINE_MAX_CHARS = 80;
 const REPEATED_LINE_MIN_COUNT = 3;
 
+// Callout labels repeat on purpose and change the meaning of what follows them.
+const CALLOUT_LABEL =
+  /^\W*(?:good to know|note|notes|warning|caution|important|tip|tips|info|danger|remember|heads up|example)\W*$/i;
+
 const HEADING = /^ {0,3}#{1,6}\s/;
 const TABLE_ROW = /^\s*\|/;
 
@@ -87,7 +91,10 @@ export function removeBoilerplate(text: string): BoilerplateResult {
     const remaining = paragraphs.join("\n\n").split("\n");
     const keyOf = (line: string) => line.trim().toLowerCase();
     const candidate = (line: string) =>
-      line.trim() !== "" && line.trim().length <= REPEATED_LINE_MAX_CHARS && !isProtectedLine(line);
+      line.trim() !== "" &&
+      line.trim().length <= REPEATED_LINE_MAX_CHARS &&
+      !isProtectedLine(line) &&
+      !CALLOUT_LABEL.test(line.trim());
     const counts = new Map<string, number>();
     for (const line of remaining) {
       if (candidate(line)) counts.set(keyOf(line), (counts.get(keyOf(line)) ?? 0) + 1);
