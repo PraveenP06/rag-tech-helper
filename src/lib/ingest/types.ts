@@ -67,8 +67,25 @@ export interface IngestDeps {
 }
 
 export type IngestResult =
-  | { status: "ready"; documentId: string; title: string; chunkCount: number }
-  | { status: "duplicate"; documentId: string; title: string; existingStatus: DocumentStatus };
+  | { status: "ready"; documentId: string; title: string; chunkCount: number; cleaning: CleaningReport }
+  | {
+      status: "duplicate";
+      documentId: string;
+      title: string;
+      existingStatus: DocumentStatus;
+      cleaning: CleaningReport;
+    };
+
+/** What ingestion would store, computed without saving anything. */
+export interface PreviewResult {
+  status: "preview";
+  title: string;
+  cleanedContent: string;
+  chunks: string[];
+  cleaning: CleaningReport;
+  /** Set when a real ingest would reject the document. */
+  wouldReject?: { reason: string };
+}
 
 /** A ready document as shown on its `/documents/<id>` page. */
 export interface ViewableDocument {

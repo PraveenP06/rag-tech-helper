@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { IngestError } from "./errors";
 import { contentHash } from "./hash";
-import { ingestDocument } from "./pipeline";
+import { ingestDocument, previewDocument } from "./pipeline";
 import type { DocumentRepo, IngestDeps, RawDocument, StoredDocument } from "./types";
 
 const raw: RawDocument = {
@@ -60,6 +60,7 @@ describe("ingestDocument", () => {
       documentId: "doc-1",
       title: "Notes",
       chunkCount: chunks.length,
+      cleaning: expect.any(Object),
     });
   });
 
@@ -71,6 +72,7 @@ describe("ingestDocument", () => {
       documentId: "old",
       title: "Old notes",
       existingStatus: "ready",
+      cleaning: expect.any(Object),
     });
     expect(deps.docs.createPending).not.toHaveBeenCalled();
     expect(deps.upsertChunks).not.toHaveBeenCalled();
@@ -130,5 +132,78 @@ describe("ingestDocument", () => {
     expect(err).toMatchObject({ kind: "upstream", message: expect.stringMatching(/pinecone down/) });
     expect(deps.docs.markFailed).toHaveBeenCalledWith("doc-1", expect.stringMatching(/pinecone down/));
     expect(deps.docs.markReady).not.toHaveBeenCalled();
+  });
+
+  it("stores and hashes the cleaned text, and starts each chunk with the title", async () => {
+    const deps = fakeDeps();
+    const messy = `Skip to main content\n\n${raw.content}\n\nBack to top`;
+    const result = await ingestDocument({ ...raw, content: messy }, deps);
+
+    expect(deps.docs.createPending).toHaveBeenCalledWith(
+      expect.objectContaining({ content: raw.content, contentHash: contentHash(raw.content) }),
+    );
+    for (const record of deps.upsertChunks.mock.calls[0][0]) {
+      expect(record.chunk_text.startsWith("Notes\n\n")).toBe(true);
+      expect(record.chunk_text.length).toBeLessThanOrEqual(200);
+    }
+    expect(result).toMatchObject({
+      status: "ready",
+      cleaning: {
+        originalChars: messy.length,
+        cleanedChars: raw.content.length,
+        boilerplateLinesRemoved: 2,
+        duplicateBlocksRemoved: 0,
+        sectionsMerged: 0,
+      },
+    });
+  });
+
+  it("treats documents that differ only by boilerplate as duplicates", async () => {
+    const deps = fakeDeps();
+    await ingestDocument(raw, deps);
+    await ingestDocument({ ...raw, content: `Copy\n\n${raw.content}\n\nWas this page helpful?` }, deps);
+    const [first, second] = deps.docs.findByHash.mock.calls;
+    expect(second).toEqual(first);
+  });
+
+  it("rejects documents with too little readable text after cleaning, without touching storage", async () => {
+    const deps = fakeDeps();
+    const err = await ingestDocument({ ...raw, content: "Copy\n\nBack to top\n\nShort note." }, deps).catch((e) => e);
+    expect(err).toMatchObject({
+      kind: "validation",
+      message: "Document has too little readable text after cleaning (9 characters; at least 100 needed)",
+    });
+    expect(deps.docs.findByHash).not.toHaveBeenCalled();
+    expect(deps.upsertChunks).not.toHaveBeenCalled();
+  });
+});
+
+describe("previewDocument", () => {
+  it("returns the cleaned text and chunks without saving anything", () => {
+    const preview = previewDocument({ ...raw, content: `Copy\n\n${raw.content}` }, { maxChars: 200, overlap: 20 });
+    expect(preview).toMatchObject({
+      status: "preview",
+      title: "Notes",
+      cleanedContent: raw.content,
+      cleaning: expect.objectContaining({ boilerplateLinesRemoved: 1 }),
+    });
+    expect(preview.chunks.length).toBeGreaterThan(1);
+    expect(preview.chunks[0].startsWith("Notes\n\nFact 0")).toBe(true);
+    expect(preview).not.toHaveProperty("wouldReject");
+  });
+
+  it("reports why a document would be rejected instead of throwing", () => {
+    const preview = previewDocument({ ...raw, content: "Copy\n\nShort note." });
+    expect(preview).toMatchObject({
+      status: "preview",
+      cleanedContent: "Short note.",
+      wouldReject: { reason: expect.stringMatching(/too little readable text/) },
+    });
+  });
+
+  it("reports empty documents with the existing message", () => {
+    expect(previewDocument({ ...raw, content: "Copy" }).wouldReject).toEqual({
+      reason: "Document has no text content to ingest",
+    });
   });
 });

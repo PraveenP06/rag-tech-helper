@@ -15,6 +15,9 @@ import type { ChunkDocument, IngestDeps } from "./types";
 
 afterEach(() => vi.unstubAllEnvs());
 
+const CONTENT =
+  "The app router uses folders to define routes. Each folder maps to a URL segment, and a page file inside it makes that segment publicly reachable.";
+
 describe("ingestion ↔ retrieval contract", () => {
   it("chunks written by the pipeline come back intact through retrieveFromPinecone", async () => {
     let written: ChunkDocument[] = [];
@@ -36,7 +39,7 @@ describe("ingestion ↔ retrieval contract", () => {
         sourceType: "url",
         sourceRef: "https://nextjs.org/docs/routing",
         title: "Routing",
-        content: "The app router uses folders to define routes.",
+        content: CONTENT,
       },
       deps,
     );
@@ -49,7 +52,8 @@ describe("ingestion ↔ retrieval contract", () => {
       {
         id: "doc-9#0",
         score: 0.9,
-        text: "The app router uses folders to define routes.",
+        // Ingestion prefixes each chunk with its title (and section path) for context.
+        text: `Routing\n\n${CONTENT}`,
         documentId: "doc-9",
         title: "Routing",
         sourceUrl: "https://nextjs.org/docs/routing",

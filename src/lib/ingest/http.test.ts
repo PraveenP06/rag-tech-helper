@@ -3,6 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import { IngestError } from "./errors";
 import { ingestResponse } from "./http";
 
+const cleaning = {
+  originalChars: 10,
+  cleanedChars: 8,
+  boilerplateLinesRemoved: 1,
+  duplicateBlocksRemoved: 0,
+  sectionsMerged: 0,
+};
+
 describe("ingestResponse", () => {
   it("returns 201 for newly ingested documents and 200 for duplicates", async () => {
     const created = await ingestResponse(async () => ({
@@ -10,6 +18,7 @@ describe("ingestResponse", () => {
       documentId: "d",
       title: "T",
       chunkCount: 3,
+      cleaning,
     }));
     expect(created.status).toBe(201);
     expect(await created.json()).toMatchObject({ status: "ready", chunkCount: 3 });
@@ -19,6 +28,7 @@ describe("ingestResponse", () => {
       documentId: "d",
       title: "T",
       existingStatus: "ready" as const,
+      cleaning,
     }));
     expect(dup.status).toBe(200);
   });
