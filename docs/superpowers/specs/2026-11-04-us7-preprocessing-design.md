@@ -41,6 +41,7 @@ Uploaded markdown goes in with its noise intact: front matter, link URLs, image 
   - Rule (d) ignores lines that start with `-`, `*`, `+` or `1.`.
   - Duplicate *paragraphs* (rule c) that are a full list block still dedupe.
   - Repeated steps like "1. Open Settings." in the iPhone and Android sections stay.
+- **Callout labels** ("Warning", "Note", "Good to know", …) are exempt from the repeated-line rule. This was added after a live check on nextjs.org. Without it, the rule would strip the label from the second and later callouts.
 - **Preview never fails the quality gate.** It returns 200 with `wouldReject: { reason }` next to the cleaned content and chunks, so you can see why a document would be emptied. Only a real ingest returns the 400.
 
 ## Goals / non-goals / anti-goals

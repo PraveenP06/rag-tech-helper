@@ -77,7 +77,7 @@ Every document is cleaned in the shared pipeline (`src/lib/ingest/preprocess/`) 
 
 1. **Characters:** line endings, Unicode NFC, and removal of invisible and control characters (zero-width spaces, BOMs, soft hyphens), which break copied commands. Ligatures and odd spaces are normalized. NFKC isn't used, so `x²` and full-width text survive.
 2. **Markup:** YAML front matter, HTML comments, reference-link definitions and inline HTML from a fixed tag list are removed. `[text](url)` becomes `text` and `![alt](src)` becomes `alt`. Placeholders such as `<your-password>` are kept.
-3. **Boilerplate:** lines that are only site UI ("Copy", "Skip to main content", "Was this page helpful?", "Back to top", …) and cookie-consent banners are removed. So are repeated paragraphs, and short lines repeated 3 or more times (the first copy stays).
+3. **Boilerplate:** lines that are only site UI ("Copy", "Skip to main content", "Was this page helpful?", "Back to top", …) and cookie-consent banners are removed. So are repeated paragraphs, and short lines repeated 3 or more times (the first copy stays, and callout labels like "Warning" or "Note" are always kept).
 4. **Whitespace:** space runs are collapsed and blank lines squeezed, keeping list indentation.
 
 Code is never changed. That covers fenced blocks, indented blocks and inline `` `code` ``. Headings, list items and numbered steps, and table rows are never treated as boilerplate.
