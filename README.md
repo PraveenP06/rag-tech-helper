@@ -80,7 +80,7 @@ Every document is cleaned in the shared pipeline (`src/lib/ingest/preprocess/`) 
 3. **Boilerplate:** lines that are only site UI ("Copy", "Skip to main content", "Was this page helpful?", "Back to top", …) and cookie-consent banners are removed. So are repeated paragraphs, and short lines repeated 3 or more times (the first copy stays, and callout labels like "Warning" or "Note" are always kept).
 4. **Whitespace:** space runs are collapsed and blank lines squeezed, keeping list indentation.
 
-Code is never changed. That covers fenced blocks, indented blocks and inline `` `code` ``. Headings, list items and numbered steps, and table rows are never treated as boilerplate.
+Code keeps its wording and layout. That covers fenced blocks (including fences indented under list items), indented blocks and inline `` `code` ``. Only the character fixes from step 1 reach inside code, because invisible characters and odd spaces break copied commands. Headings, list items and numbered steps, table rows (with or without outer pipes) and a label just before a code block, such as "Output:", are never treated as boilerplate.
 
 The **cleaned** text is what gets hashed for duplicate detection, stored in Supabase and shown on `/documents/<id>`.
 
