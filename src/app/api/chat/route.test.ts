@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { UsageLogInput, UsageLogger } from "../../../lib/admin/usage-logger";
 import { createPostHandler } from "./route";
 
 const requestFor = (body: unknown): Request =>
@@ -55,7 +56,10 @@ describe("POST /api/chat usage logging", () => {
   };
 
   it("logs successful requests with latency and grounded status", async () => {
-    const logUsage = vi.fn(async () => undefined);
+    let loggedEntry: UsageLogInput | undefined;
+    const logUsage = vi.fn<UsageLogger>(async (entry) => {
+      loggedEntry = entry;
+    });
     const handler = createPostHandler({
       retrieve: vi.fn(async () => [chunk]),
       generate: vi.fn(async () => "Press the green button."),
@@ -67,15 +71,16 @@ describe("POST /api/chat usage logging", () => {
 
     expect(response.status).toBe(200);
     expect(logUsage).toHaveBeenCalledOnce();
-    const entry = logUsage.mock.calls[0][0];
-    expect(entry.status).toBe("ok");
-    expect(entry.grounded).toBe(true);
-    expect(entry.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(loggedEntry).toMatchObject({ status: "ok", grounded: true });
+    expect(loggedEntry?.latencyMs ?? -1).toBeGreaterThanOrEqual(0);
   });
 
   it("logs failed requests as errors", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const logUsage = vi.fn(async () => undefined);
+    let loggedEntry: UsageLogInput | undefined;
+    const logUsage = vi.fn<UsageLogger>(async (entry) => {
+      loggedEntry = entry;
+    });
     const handler = createPostHandler({
       retrieve: vi.fn(async () => {
         throw new Error("Pinecone failed");
@@ -89,12 +94,12 @@ describe("POST /api/chat usage logging", () => {
 
     expect(response.status).toBe(500);
     expect(logUsage).toHaveBeenCalledOnce();
-    expect(logUsage.mock.calls[0][0]).toMatchObject({ status: "error", grounded: null });
+    expect(loggedEntry).toMatchObject({ status: "error", grounded: null });
     errorSpy.mockRestore();
   });
 
   it("still answers when the logger throws", async () => {
-    const logUsage = vi.fn(async () => {
+    const logUsage = vi.fn<UsageLogger>(async () => {
       throw new Error("Supabase down");
     });
     const handler = createPostHandler({
