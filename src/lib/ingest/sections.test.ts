@@ -30,4 +30,10 @@ describe("splitSections", () => {
   it("returns nothing for empty input", () => {
     expect(splitSections("")).toEqual([]);
   });
+
+  it("handles very long runs of whitespace quickly", () => {
+    const start = performance.now();
+    splitSections("# A\n\n" + " ".repeat(200_000) + "text\n\n" + "\t".repeat(200_000) + "more");
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
 });

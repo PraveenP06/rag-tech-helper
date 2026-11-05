@@ -17,7 +17,7 @@ export function splitSections(markdown: string): Section[] {
   let current = { headingPath: [] as string[], level: 0, lines: [] as string[] };
 
   const finish = () => {
-    const body = current.lines.join("\n").replace(/^\n+|\s+$/g, "");
+    const body = current.lines.join("\n").replace(/^\n+/, "").trimEnd();
     if (body) sections.push({ headingPath: current.headingPath, level: current.level, body });
   };
 

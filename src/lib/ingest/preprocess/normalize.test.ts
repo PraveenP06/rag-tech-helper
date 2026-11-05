@@ -31,4 +31,21 @@ describe("normalizeText", () => {
     const text = "x\n\n```\nif  (a)   {\n\tb();   \n}\n\n\n\n```\n\nrun `a   b`";
     expect(normalizeText(text)).toBe(text);
   });
+
+  it("leaves a code fence nested under a list item exactly as written", () => {
+    const text = "1. Install:\n\n    ```bash\n    docker run  -p 8080:80   nginx\n    ```";
+    expect(normalizeText(text)).toBe(text);
+  });
+
+  it("keeps joiner characters that words and emoji need (ZWNJ, ZWJ)", () => {
+    const text = "می‌خواهم 👨‍👩‍👧";
+    expect(normalizeText(text)).toBe(text);
+  });
+
+  it("handles very long runs of spaces quickly", () => {
+    const text = " ".repeat(200_000) + "x\n" + "\t".repeat(200_000) + "y" + " ".repeat(200_000);
+    const start = performance.now();
+    normalizeText(text);
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
 });

@@ -1,9 +1,10 @@
 import { withCodeProtected } from "./fences";
 
 const FRONT_MATTER = /^---[ \t]*\n([\s\S]*?)\n(?:---|\.\.\.)[ \t]*(?:\n|$)/;
-const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+// Stops at a code placeholder (U+E000), so markers on both sides of a code block never swallow the code.
+const HTML_COMMENT = /<!--[^\uE000]*?-->/g;
 // Only URL-looking targets, so prose like "[Note]: remember" is left alone.
-const REFERENCE_DEFINITION = /^ {0,3}\[[^\]\n]+\]:[ \t]+<?(?:[a-z]+:|\/|#|\.\.?\/)\S*.*(?:\n|$)/gim;
+const REFERENCE_DEFINITION = /^ {0,3}\[[^\]\n]+\]:[ \t]+<?(?:[a-z][a-z0-9+.-]*:\/\/|mailto:|\/|#|\.\.?\/)\S*.*(?:\n|$)/gim;
 const LINK_TARGET = String.raw`\(\s*<?([^)\s>]*)>?(?:\s+["'(][^)\n]*["')])?\s*\)`;
 const IMAGE = new RegExp(String.raw`!\[([^\]\n]*)\]` + LINK_TARGET, "g");
 const LINK = new RegExp(String.raw`\[([^\]\n]*)\]` + LINK_TARGET, "g");

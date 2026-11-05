@@ -53,4 +53,14 @@ describe("stripMarkdownNoise", () => {
     const text = "```html\n<div>[a](b) <!-- c --></div>\n```\n\nRun `<b>[x](y)</b>`";
     expect(stripMarkdownNoise(text)).toBe(text);
   });
+
+  it("does not treat comment markers on both sides of a code block as one comment", () => {
+    const text = "Comments begin with <!-- in HTML.\n\n```html\n<p>hi</p>\n```\n\nAnd end with --> after.";
+    expect(stripMarkdownNoise(text)).toBe(text);
+  });
+
+  it("keeps prose that only looks like a reference definition", () => {
+    expect(stripMarkdownNoise("[Note]: Important: back up first.")).toBe("[Note]: Important: back up first.");
+    expect(stripMarkdownNoise("Intro\n[docs]: https://example.test/a\n[mail]: mailto:a@b.test\nEnd")).toBe("Intro\nEnd");
+  });
 });

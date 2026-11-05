@@ -56,4 +56,13 @@ describe("withCodeProtected", () => {
   it("drops stray private-use placeholder characters from the input", () => {
     expect(withCodeProtected("abc", (s) => s)).toBe("abc");
   });
+
+  it("treats a fence indented under a list item as code", () => {
+    const text = "1. Install:\n\n    ```bash\n    docker run  -p 8080:80   nginx\n    ```\n\n2. Done.";
+    expect(splitBlocks(text)).toEqual([
+      { code: false, text: "1. Install:\n" },
+      { code: true, text: "    ```bash\n    docker run  -p 8080:80   nginx\n    ```" },
+      { code: false, text: "\n2. Done." },
+    ]);
+  });
 });

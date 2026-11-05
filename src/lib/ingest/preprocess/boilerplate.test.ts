@@ -66,4 +66,36 @@ describe("removeBoilerplate", () => {
     const text = ["iPhone", "Android", "iPad"].map(section).join("\n\n");
     expect(removeBoilerplate(text)).toEqual({ text, linesRemoved: 0, duplicatesRemoved: 0 });
   });
+
+  it("never touches a code fence nested under a list item", () => {
+    const text = "2. Then:\n\n    ```python\n    print\n    }\n    }\n    }\n    ```";
+    expect(removeBoilerplate(text)).toEqual({ text, linesRemoved: 0, duplicatesRemoved: 0 });
+  });
+
+  it("keeps a repeated label that introduces code", () => {
+    const fence = "```";
+    const section = (n: string) =>
+      `## ${n}\n\nOutput\n\n${fence}\nresult ${n}\n${fence}\n\nRun:\n\n${fence}\nrun ${n}\n${fence}`;
+    const text = ["A", "B", "C"].map(section).join("\n\n");
+    expect(removeBoilerplate(text)).toEqual({ text, linesRemoved: 0, duplicatesRemoved: 0 });
+  });
+
+  it("keeps the header rows of tables written without a leading pipe", () => {
+    const table = (n: number) => `Name | Value\n--- | ---\nk${n} | v${n}`;
+    const text = [1, 2, 3].map(table).join("\n\n");
+    expect(removeBoilerplate(text)).toEqual({ text, linesRemoved: 0, duplicatesRemoved: 0 });
+  });
+
+  it("still removes a short non-table line with pipes that repeats", () => {
+    const text = ["Home | About | Contact", para(1), "Home | About | Contact", para(2), "Home | About | Contact"].join("\n\n");
+    // Leftover blank lines are squeezed by the normalize pass that runs after this step.
+    const squeezed = removeBoilerplate(text).text.replace(/\n{3,}/g, "\n\n").trim();
+    expect(squeezed).toBe(["Home | About | Contact", para(1), para(2)].join("\n\n"));
+  });
+
+  it("handles very long lines of punctuation quickly", () => {
+    const start = performance.now();
+    removeBoilerplate(".".repeat(200_000) + "y\n\n" + " ".repeat(200_000) + "z");
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
 });

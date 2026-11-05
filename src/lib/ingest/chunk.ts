@@ -16,10 +16,19 @@ interface Unit {
   sep: string;
 }
 
+/** Drops trailing spaces and tabs with a scan, since /[ \t]+\n/ is quadratic on long runs of spaces. */
+function trimTrailingBlanks(line: string): string {
+  let end = line.length;
+  while (end > 0 && (line[end - 1] === " " || line[end - 1] === "\t")) end--;
+  return line.slice(0, end);
+}
+
 function normalize(text: string): string {
   return text
     .replace(/\r\n?/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
+    .split("\n")
+    .map(trimTrailingBlanks)
+    .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

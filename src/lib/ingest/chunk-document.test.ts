@@ -69,4 +69,11 @@ describe("chunkDocument", () => {
   it("returns no chunks for empty content", () => {
     expect(chunkDocument("", "T")).toEqual({ chunks: [], sectionsMerged: 0 });
   });
+
+  it("handles very long runs of indentation quickly", () => {
+    const start = performance.now();
+    const { chunks } = chunkDocument("Intro text.\n\n" + " ".repeat(200_000) + "x\n" + "\t".repeat(200_000) + "y", "T");
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(chunks.every((chunk) => chunk.length <= 1000)).toBe(true);
+  });
 });

@@ -9,7 +9,8 @@ export interface Block {
   text: string;
 }
 
-const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
+// Any indentation: fences nested under list items are indented 4+ spaces (MkDocs requires it).
+const FENCE_OPEN = /^[ \t]*(`{3,}|~{3,})/;
 const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const INDENTED = /^(?: {4}|\t)/;
 const INLINE_CODE = /(?<!`)(`+)(?!`)[^\n]*?(?<!`)\1(?!`)/g;
@@ -36,7 +37,7 @@ export function splitBlocks(text: string): Block[] {
     const fence = FENCE_OPEN.exec(line);
     if (fence) {
       const marker = fence[1];
-      const close = new RegExp(`^ {0,3}${marker[0] === "`" ? "`" : "~"}{${marker.length},}\\s*$`);
+      const close = new RegExp(`^[ \\t]*${marker[0] === "`" ? "`" : "~"}{${marker.length},}\\s*$`);
       let end = i + 1;
       while (end < lines.length && !close.test(lines[end])) end++;
       flushProse();
