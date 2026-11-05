@@ -14,6 +14,11 @@ describe("chunkDocument", () => {
     expect(sectionsMerged).toBe(0);
   });
 
+  it("drops repeated consecutive parts of the context line", () => {
+    const text = `# Route Handlers\n\n## Route Handlers\n\n${long("Intro")}`;
+    expect(chunkDocument(text, "Route Handlers").chunks[0].split("\n\n")[0]).toBe("Route Handlers");
+  });
+
   it("uses just the title when there are no headings", () => {
     expect(chunkDocument("Plain notes.", "Notes")).toEqual({ chunks: ["Notes\n\nPlain notes."], sectionsMerged: 0 });
   });

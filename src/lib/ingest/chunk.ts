@@ -114,8 +114,10 @@ export interface DocumentChunks {
 const MAX_PREFIX_CHARS = 200;
 
 function contextPrefix(title: string, headingPath: string[], maxChars: number): string {
-  const parts = [title.trim(), ...headingPath].filter(Boolean);
-  if (parts.length > 1 && parts[0].toLowerCase() === parts[1].toLowerCase()) parts.splice(1, 1);
+  // Skip a heading that repeats the part before it, e.g. an H1 equal to the title.
+  const parts = [title.trim(), ...headingPath].filter(
+    (part, i, all) => part && (i === 0 || part.toLowerCase() !== all[i - 1].toLowerCase()),
+  );
   const prefix = parts.join(" > ");
   const cap = Math.min(MAX_PREFIX_CHARS, Math.floor(maxChars / 4));
   return prefix.length > cap ? `${prefix.slice(0, cap - 1).trimEnd()}…` : prefix;
