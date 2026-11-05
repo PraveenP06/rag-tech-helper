@@ -1,17 +1,17 @@
 name: Deploy to Vercel
 
-# Deploys every push using the repo owner's Vercel token, so
-# collaborators' commits deploy without needing a Vercel team seat.
+# Deploys main using the repo owner's Vercel token.
 # Requires repo secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
 # Keep Vercel's own Git integration disconnected to avoid duplicate/blocked deploys.
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,11 +23,7 @@ jobs:
 
       - name: Deploy to Vercel
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            npx -y vercel deploy --prod --token="${{ secrets.VERCEL_TOKEN }}" --yes
-          else
-            npx -y vercel deploy --token="${{ secrets.VERCEL_TOKEN }}" --yes
-          fi
+          npx -y vercel deploy --prod --token="${{ secrets.VERCEL_TOKEN }}" --yes
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
