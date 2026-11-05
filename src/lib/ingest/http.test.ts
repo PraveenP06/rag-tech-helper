@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { IngestError } from "./errors";
-import { ingestResponse } from "./http";
+import { ingestResponse, isPreviewRequest } from "./http";
 
 const cleaning = {
   originalChars: 10,
@@ -70,5 +70,24 @@ describe("ingestResponse auth statuses", () => {
       throw new IngestError("Ingestion is disabled", "unavailable");
     });
     expect(off.status).toBe(503);
+  });
+});
+
+describe("isPreviewRequest", () => {
+  it("is true only for ?preview=1", () => {
+    expect(isPreviewRequest(new Request("http://x/api/ingest/text?preview=1"))).toBe(true);
+    expect(isPreviewRequest(new Request("http://x/api/ingest/text?preview=0"))).toBe(false);
+    expect(isPreviewRequest(new Request("http://x/api/ingest/text"))).toBe(false);
+  });
+
+  it("returns previews with status 200", async () => {
+    const res = await ingestResponse(async () => ({
+      status: "preview" as const,
+      title: "T",
+      cleanedContent: "Body",
+      chunks: ["T\n\nBody"],
+      cleaning,
+    }));
+    expect(res.status).toBe(200);
   });
 });
