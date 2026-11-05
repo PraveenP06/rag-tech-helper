@@ -58,6 +58,10 @@ async function UsageOverview() {
           </p>
         </div>
         <div>
+          <p className="text-sm text-zinc-600">Failed requests</p>
+          <p className="text-3xl font-semibold">{overview.stats.errorCount}</p>
+        </div>
+        <div>
           <p className="text-sm text-zinc-600">Average latency</p>
           <p className="text-3xl font-semibold">
             {Math.round(overview.stats.averageLatencyMs)} ms
@@ -69,7 +73,7 @@ async function UsageOverview() {
         </div>
       </section>
       <p className="text-sm text-zinc-600">
-        Latency stats cover the {overview.statsSampleSize} most recent queries.
+        Latency and failure stats cover the {overview.statsSampleSize} most recent queries.
       </p>
       <section className="flex flex-col gap-4">
         <h2 className="text-xl font-semibold">Recent queries</h2>
