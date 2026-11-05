@@ -11,6 +11,15 @@ export interface RawDocument {
   content: string;
 }
 
+/** What preprocessing did to a document; returned with every ingest and preview. */
+export interface CleaningReport {
+  originalChars: number;
+  cleanedChars: number;
+  boilerplateLinesRemoved: number;
+  duplicateBlocksRemoved: number;
+  sectionsMerged: number;
+}
+
 export type DocumentStatus = "pending" | "ready" | "failed";
 
 export interface StoredDocument {
