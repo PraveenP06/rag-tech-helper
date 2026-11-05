@@ -4,16 +4,22 @@ import { IngestError } from "@/lib/ingest/errors";
 
 const ingestDocument = vi.hoisted(() => vi.fn());
 const fromUrl = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument }));
+const previewDocument = vi.hoisted(() => vi.fn());
+const createIngestDeps = vi.hoisted(() => vi.fn(() => ({ fake: true })));
+vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument, previewDocument }));
 vi.mock("@/lib/ingest/sources/url", () => ({ fromUrl }));
-vi.mock("@/lib/ingest/deps", () => ({ createIngestDeps: () => ({ fake: true }) }));
+vi.mock("@/lib/ingest/deps", () => ({ createIngestDeps }));
 
 import { POST } from "./route";
 
 const raw = { sourceType: "url", sourceRef: "https://x.dev/", title: "X", content: "Body" };
 
+const preview = { status: "preview", title: "T", cleanedContent: "Body", chunks: ["T\n\nBody"], cleaning: {} };
+
 beforeEach(() => {
   vi.stubEnv("INGEST_API_KEY", "test-key");
+  previewDocument.mockReset().mockReturnValue(preview);
+  createIngestDeps.mockClear();
   fromUrl.mockReset().mockResolvedValue(raw);
   ingestDocument
     .mockReset()
@@ -57,5 +63,20 @@ describe("POST /api/ingest/url", () => {
     const res = await post(JSON.stringify({ url: "https://x.dev" }), "application/json", "Bearer wrong");
     expect(res.status).toBe(401);
     expect(fromUrl).not.toHaveBeenCalled();
+  });
+
+  it("previews a scraped page with ?preview=1 without ingesting or touching storage", async () => {
+    const res = await POST(
+      new Request("http://localhost/api/ingest/url?preview=1", {
+        method: "POST",
+        body: JSON.stringify({ url: "https://x.dev" }),
+        headers: { "content-type": "application/json", authorization: "Bearer test-key" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(preview);
+    expect(previewDocument).toHaveBeenCalledWith(raw);
+    expect(ingestDocument).not.toHaveBeenCalled();
+    expect(createIngestDeps).not.toHaveBeenCalled();
   });
 });

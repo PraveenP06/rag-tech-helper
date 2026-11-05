@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useSyncExternalStore, type FormEvent } from "react";
-import type { IngestResult } from "@/lib/ingest/types";
+import type { CleaningReport, IngestResult, PreviewResult } from "@/lib/ingest/types";
 
-type Outcome = { kind: "result"; result: IngestResult } | { kind: "error"; message: string } | null;
+type Result = IngestResult | PreviewResult;
+type Outcome = { kind: "result"; result: Result } | { kind: "error"; message: string } | null;
 type Tab = "text" | "url";
+type Action = "ingest" | "preview";
 
 const inputClass =
   "w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 " +
@@ -12,6 +14,9 @@ const inputClass =
 const buttonClass =
   "rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors " +
   "hover:bg-[#383838] disabled:opacity-50 dark:hover:bg-[#ccc]";
+const secondaryButtonClass =
+  "rounded-full border border-black/10 px-5 py-2 text-sm font-medium transition-colors " +
+  "hover:bg-black/[.04] disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/[.06]";
 
 // The ingest API key lives in sessionStorage so it survives reloads but not the browser session.
 // useSyncExternalStore keeps the prerendered HTML (empty key) and the client in agreement.
@@ -54,7 +59,44 @@ async function send(url: string, init: RequestInit): Promise<Outcome> {
   if (!res.ok) {
     return { kind: "error", message: body?.error ?? `Request failed with status ${res.status}` };
   }
-  return { kind: "result", result: body as IngestResult };
+  return { kind: "result", result: body as Result };
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** "Cleaned: removed 12 boilerplate lines and 2 duplicate blocks; merged 3 small sections (1,200 → 950 characters)." */
+function cleaningSummary(c: CleaningReport): string {
+  const removed = [
+    c.boilerplateLinesRemoved > 0 && plural(c.boilerplateLinesRemoved, "boilerplate line"),
+    c.duplicateBlocksRemoved > 0 && plural(c.duplicateBlocksRemoved, "duplicate block"),
+  ].filter(Boolean);
+  const parts = [
+    removed.length > 0 && `removed ${removed.join(" and ")}`,
+    c.sectionsMerged > 0 && `merged ${plural(c.sectionsMerged, "small section")}`,
+  ].filter(Boolean);
+  const chars = `${c.originalChars.toLocaleString("en-US")} → ${c.cleanedChars.toLocaleString("en-US")} characters`;
+  return `Cleaned: ${parts.length ? parts.join("; ") : "no boilerplate or duplicates found"} (${chars}).`;
+}
+
+function PreviewView({ result }: { result: PreviewResult }) {
+  return (
+    <div role="status" className="flex flex-col gap-3 rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950 dark:text-sky-100">
+      <p>
+        Preview of “{result.title}”: {plural(result.chunks.length, "chunk")}. Nothing was saved.
+      </p>
+      {result.wouldReject && (
+        <p className="font-medium text-amber-800 dark:text-amber-200">This would be rejected: {result.wouldReject.reason}</p>
+      )}
+      <p className="text-xs opacity-75">{cleaningSummary(result.cleaning)}</p>
+      <ol className="flex list-decimal flex-col gap-2 pl-5">
+        {result.chunks.map((chunk, i) => (
+          <li key={i}>
+            <pre className="whitespace-pre-wrap rounded bg-white/70 p-2 font-mono text-xs dark:bg-black/30">{chunk}</pre>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 function OutcomeView({ outcome }: { outcome: Outcome }) {
@@ -67,6 +109,7 @@ function OutcomeView({ outcome }: { outcome: Outcome }) {
     );
   }
   const { result } = outcome;
+  if (result.status === "preview") return <PreviewView result={result} />;
   return (
     <p role="status" className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
       {result.status === "ready" ? (
@@ -79,41 +122,58 @@ function OutcomeView({ outcome }: { outcome: Outcome }) {
         </>
       )}{" "}
       <span className="font-mono text-xs opacity-75">id {result.documentId}</span>
+      {result.cleaning && <span className="mt-1 block text-xs opacity-75">{cleaningSummary(result.cleaning)}</span>}
     </p>
   );
 }
 
-function useSubmit() {
-  const [pending, setPending] = useState(false);
+/** Both buttons send the same request; Preview adds `?preview=1` so nothing is stored. */
+function useSubmit(url: string, buildInit: () => RequestInit) {
+  const [pending, setPending] = useState<Action | null>(null);
   const [outcome, setOutcome] = useState<Outcome>(null);
-  const run = async (url: string, init: RequestInit) => {
-    setPending(true);
+  const run = async (action: Action) => {
+    setPending(action);
     setOutcome(null);
-    setOutcome(await send(url, init));
-    setPending(false);
+    setOutcome(await send(action === "preview" ? `${url}?preview=1` : url, buildInit()));
+    setPending(null);
   };
   return { pending, outcome, run };
+}
+
+function Buttons({ pending, run, label }: { pending: Action | null; run: (a: Action) => void; label: string }) {
+  return (
+    <div className="flex gap-3">
+      <button type="submit" className={buttonClass} disabled={pending !== null}>
+        {pending === "ingest" ? "Ingesting…" : label}
+      </button>
+      <button type="button" className={secondaryButtonClass} disabled={pending !== null} onClick={() => run("preview")}>
+        {pending === "preview" ? "Previewing…" : "Preview"}
+      </button>
+    </div>
+  );
 }
 
 function TextForm({ apiKey }: { apiKey: string }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const { pending, outcome, run } = useSubmit();
-
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault();
+  const { pending, outcome, run } = useSubmit("/api/ingest/text", () => {
     if (file) {
       const form = new FormData();
       form.set("file", file);
       if (title.trim()) form.set("title", title);
-      return run("/api/ingest/text", { method: "POST", headers: authHeader(apiKey), body: form });
+      return { method: "POST", headers: authHeader(apiKey), body: form };
     }
-    return run("/api/ingest/text", {
+    return {
       method: "POST",
       headers: { "content-type": "application/json", ...authHeader(apiKey) },
       body: JSON.stringify({ title, content }),
-    });
+    };
+  });
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    return run("ingest");
   };
 
   return (
@@ -144,11 +204,7 @@ function TextForm({ apiKey }: { apiKey: string }) {
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         />
       </div>
-      <div>
-        <button type="submit" className={buttonClass} disabled={pending}>
-          {pending ? "Ingesting…" : "Ingest text"}
-        </button>
-      </div>
+      <Buttons pending={pending} run={run} label="Ingest text" />
       <OutcomeView outcome={outcome} />
     </form>
   );
@@ -156,15 +212,15 @@ function TextForm({ apiKey }: { apiKey: string }) {
 
 function UrlForm({ apiKey }: { apiKey: string }) {
   const [url, setUrl] = useState("");
-  const { pending, outcome, run } = useSubmit();
+  const { pending, outcome, run } = useSubmit("/api/ingest/url", () => ({
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeader(apiKey) },
+    body: JSON.stringify({ url }),
+  }));
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    return run("/api/ingest/url", {
-      method: "POST",
-      headers: { "content-type": "application/json", ...authHeader(apiKey) },
-      body: JSON.stringify({ url }),
-    });
+    return run("ingest");
   };
 
   return (
@@ -182,11 +238,7 @@ function UrlForm({ apiKey }: { apiKey: string }) {
         />
         <p className="text-xs text-zinc-500">Fetches one public page and keeps its main text.</p>
       </div>
-      <div>
-        <button type="submit" className={buttonClass} disabled={pending}>
-          {pending ? "Ingesting…" : "Ingest page"}
-        </button>
-      </div>
+      <Buttons pending={pending} run={run} label="Ingest page" />
       <OutcomeView outcome={outcome} />
     </form>
   );

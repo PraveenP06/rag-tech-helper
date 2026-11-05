@@ -2,15 +2,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ingestDocument = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument }));
-vi.mock("@/lib/ingest/deps", () => ({ createIngestDeps: () => ({ fake: true }) }));
+const previewDocument = vi.hoisted(() => vi.fn());
+const createIngestDeps = vi.hoisted(() => vi.fn(() => ({ fake: true })));
+vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument, previewDocument }));
+vi.mock("@/lib/ingest/deps", () => ({ createIngestDeps }));
 
 import { POST } from "./route";
 
 const ready = { status: "ready", documentId: "d1", title: "T", chunkCount: 2 };
 
+const preview = { status: "preview", title: "T", cleanedContent: "Body", chunks: ["T\n\nBody"], cleaning: {} };
+
 beforeEach(() => {
   vi.stubEnv("INGEST_API_KEY", "test-key");
+  previewDocument.mockReset().mockReturnValue(preview);
+  createIngestDeps.mockClear();
   ingestDocument.mockReset().mockResolvedValue(ready);
 });
 
@@ -91,5 +97,37 @@ describe("POST /api/ingest/text", () => {
     });
     expect(res.status).toBe(503);
     expect(ingestDocument).not.toHaveBeenCalled();
+  });
+
+  it("previews pasted text with ?preview=1 without ingesting or touching storage", async () => {
+    const res = await POST(
+      new Request("http://localhost/api/ingest/text?preview=1", {
+        method: "POST",
+        body: JSON.stringify({ title: "Note", content: "Hello" }),
+        headers: { authorization: "Bearer test-key", "content-type": "application/json" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(preview);
+    expect(previewDocument).toHaveBeenCalledWith({
+      sourceType: "upload",
+      sourceRef: "pasted-text",
+      title: "Note",
+      content: "Hello",
+    });
+    expect(ingestDocument).not.toHaveBeenCalled();
+    expect(createIngestDeps).not.toHaveBeenCalled();
+  });
+
+  it("requires the ingest API key for previews too", async () => {
+    const res = await POST(
+      new Request("http://localhost/api/ingest/text?preview=1", {
+        method: "POST",
+        body: JSON.stringify({ title: "Note", content: "Hello" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    expect(res.status).toBe(401);
+    expect(previewDocument).not.toHaveBeenCalled();
   });
 });
