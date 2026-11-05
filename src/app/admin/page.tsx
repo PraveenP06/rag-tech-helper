@@ -1,7 +1,24 @@
+import { Suspense } from "react";
+
 import { getUsageOverview } from "@/lib/admin/usage-store";
 import { getUsageSupabaseClient } from "@/lib/admin/supabase";
 
-export default async function AdminUsagePage() {
+export default function AdminUsagePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 px-6 py-12">
+          <h1 className="text-2xl font-semibold">Usage logs</h1>
+          <p>Loading usage logs...</p>
+        </main>
+      }
+    >
+      <UsageOverview />
+    </Suspense>
+  );
+}
+
+async function UsageOverview() {
   const client = getUsageSupabaseClient();
 
   if (!client) {
