@@ -1,8 +1,8 @@
 import { assertIngestAuthorized } from "@/lib/ingest/auth";
 import { createIngestDeps } from "@/lib/ingest/deps";
 import { IngestError } from "@/lib/ingest/errors";
-import { assertContentLength, ingestResponse } from "@/lib/ingest/http";
-import { ingestDocument } from "@/lib/ingest/pipeline";
+import { assertContentLength, ingestResponse, isPreviewRequest } from "@/lib/ingest/http";
+import { ingestDocument, previewDocument } from "@/lib/ingest/pipeline";
 import { MAX_TEXT_BYTES, fromFile, fromText } from "@/lib/ingest/sources/text";
 import type { RawDocument } from "@/lib/ingest/types";
 
@@ -40,12 +40,13 @@ async function readRawDocument(request: Request): Promise<RawDocument> {
  * Ingestion method 1: direct upload.
  *   JSON:      { "title": "...", "content": "..." }
  *   Multipart: file=<.md|.markdown|.txt>, optional title
+ * Add `?preview=1` to see the cleaned text and chunks without storing anything.
  */
 export async function POST(request: Request) {
   return ingestResponse(async () => {
     assertIngestAuthorized(request);
     assertContentLength(request, MAX_BODY_BYTES);
     const raw = await readRawDocument(request);
-    return ingestDocument(raw, createIngestDeps());
+    return isPreviewRequest(request) ? previewDocument(raw) : ingestDocument(raw, createIngestDeps());
   });
 }

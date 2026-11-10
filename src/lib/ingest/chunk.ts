@@ -1,3 +1,6 @@
+import { MIN_SECTION_CHARS, meaningfulLength } from "./preprocess/quality";
+import { type Section, splitSections } from "./sections";
+
 export interface ChunkOptions {
   /** Hard upper bound on chunk length, in characters. */
   maxChars?: number;
@@ -13,10 +16,19 @@ interface Unit {
   sep: string;
 }
 
+/** Drops trailing spaces and tabs with a scan, since /[ \t]+\n/ is quadratic on long runs of spaces. */
+function trimTrailingBlanks(line: string): string {
+  let end = line.length;
+  while (end > 0 && (line[end - 1] === " " || line[end - 1] === "\t")) end--;
+  return line.slice(0, end);
+}
+
 function normalize(text: string): string {
   return text
     .replace(/\r\n?/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
+    .split("\n")
+    .map(trimTrailingBlanks)
+    .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -96,4 +108,91 @@ export function chunkText(input: string, options: ChunkOptions = {}): string[] {
   }
   if (current) chunks.push(current);
   return chunks;
+}
+
+// ---------------------------------------------------------------------------
+// Section-aware chunking with a context line
+// ---------------------------------------------------------------------------
+
+export interface DocumentChunks {
+  /** Each chunk is `<title > heading path>\n\n<body>`, at most maxChars long. */
+  chunks: string[];
+  sectionsMerged: number;
+}
+
+const MAX_PREFIX_CHARS = 200;
+
+function contextPrefix(title: string, headingPath: string[], maxChars: number): string {
+  // Skip a heading that repeats the part before it, e.g. an H1 equal to the title.
+  const parts = [title.trim(), ...headingPath].filter(
+    (part, i, all) => part && (i === 0 || part.toLowerCase() !== all[i - 1].toLowerCase()),
+  );
+  const prefix = parts.join(" > ");
+  const cap = Math.min(MAX_PREFIX_CHARS, Math.floor(maxChars / 4));
+  return prefix.length > cap ? `${prefix.slice(0, cap - 1).trimEnd()}…` : prefix;
+}
+
+const headingLine = (section: Section) =>
+  `${"#".repeat(Math.min(6, Math.max(1, section.level)))} ${section.headingPath[section.headingPath.length - 1]}`;
+
+function commonPath(a: string[], b: string[]): string[] {
+  let n = 0;
+  while (n < a.length && n < b.length && a[n] === b[n]) n++;
+  return a.slice(0, n);
+}
+
+/**
+ * Joins `next` onto `target` under their shared heading path, writing any heading that drops out
+ * of the path into the body so its context isn't lost. Returns null if the result won't fit.
+ */
+function merged(target: Section, next: Section, title: string, maxChars: number): Section | null {
+  const path = commonPath(target.headingPath, next.headingPath);
+  const parts: string[] = [];
+  if (target.headingPath.length > path.length) parts.push(headingLine(target));
+  parts.push(target.body);
+  if (next.headingPath.length > path.length) parts.push(headingLine(next));
+  parts.push(next.body);
+  const body = parts.join("\n\n");
+  const prefix = contextPrefix(title, path, maxChars);
+  if (body.length + prefix.length + 2 > maxChars) return null;
+  return { headingPath: path, level: path.length, body };
+}
+
+const isSmall = (section: Section) => meaningfulLength(section.body) < MIN_SECTION_CHARS;
+
+/**
+ * Splits a cleaned document into chunks that stay inside one section and start with a
+ * `Title > Heading > Subheading` line, so each chunk makes sense on its own. Sections too small
+ * to stand alone are merged into the next section (or the previous one, at the end).
+ */
+export function chunkDocument(content: string, title: string, options: ChunkOptions = {}): DocumentChunks {
+  const { maxChars, overlap } = { ...DEFAULT_CHUNK_OPTIONS, ...options };
+  const sections: Section[] = [];
+  let sectionsMerged = 0;
+
+  for (const section of splitSections(content)) {
+    const prev = sections[sections.length - 1];
+    const joined = prev && isSmall(prev) ? merged(prev, section, title, maxChars) : null;
+    if (joined) {
+      sections[sections.length - 1] = joined;
+      sectionsMerged++;
+    } else {
+      sections.push(section);
+    }
+  }
+  if (sections.length > 1 && isSmall(sections[sections.length - 1])) {
+    const joined = merged(sections[sections.length - 2], sections[sections.length - 1], title, maxChars);
+    if (joined) {
+      sections.splice(-2, 2, joined);
+      sectionsMerged++;
+    }
+  }
+
+  const chunks = sections.flatMap((section) => {
+    const prefix = contextPrefix(title, section.headingPath, maxChars);
+    const bodyMax = prefix ? maxChars - prefix.length - 2 : maxChars;
+    const pieces = chunkText(section.body, { maxChars: bodyMax, overlap: Math.min(overlap, Math.floor(bodyMax / 2)) });
+    return pieces.map((piece) => (prefix ? `${prefix}\n\n${piece}` : piece));
+  });
+  return { chunks, sectionsMerged };
 }

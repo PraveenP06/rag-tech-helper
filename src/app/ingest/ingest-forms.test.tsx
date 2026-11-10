@@ -104,4 +104,74 @@ describe("IngestForms", () => {
     render(<IngestForms />);
     expect(await screen.findByLabelText("Ingest API key")).toHaveValue("k1");
   });
+
+  it("shows what cleaning did after ingesting", async () => {
+    const user = await setup();
+    respond(201, {
+      status: "ready",
+      documentId: "doc-4",
+      title: "Wi-Fi",
+      chunkCount: 2,
+      cleaning: { originalChars: 1200, cleanedChars: 950, boilerplateLinesRemoved: 12, duplicateBlocksRemoved: 2, sectionsMerged: 3 },
+    });
+
+    await user.type(screen.getByLabelText("Title"), "Wi-Fi");
+    await user.type(screen.getByLabelText("Content"), "Body");
+    await user.click(screen.getByRole("button", { name: "Ingest text" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Cleaned: removed 12 boilerplate lines and 2 duplicate blocks; merged 3 small sections (1,200 → 950 characters).",
+    );
+  });
+
+  it("previews pasted text without ingesting it", async () => {
+    const user = await setup();
+    respond(200, {
+      status: "preview",
+      title: "Wi-Fi",
+      cleanedContent: "Open Settings.",
+      chunks: ["Wi-Fi\n\nOpen Settings.", "Wi-Fi > Android\n\nOpen Quick Settings."],
+      cleaning: { originalChars: 40, cleanedChars: 30, boilerplateLinesRemoved: 1, duplicateBlocksRemoved: 0, sectionsMerged: 0 },
+    });
+
+    await user.type(screen.getByLabelText("Title"), "Wi-Fi");
+    await user.type(screen.getByLabelText("Content"), "Copy\nOpen Settings.");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/ingest/text?preview=1", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer k1" },
+      body: JSON.stringify({ title: "Wi-Fi", content: "Copy\nOpen Settings." }),
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Preview of “Wi-Fi”: 2 chunks. Nothing was saved.");
+    expect(status).toHaveTextContent("Cleaned: removed 1 boilerplate line");
+    const items = screen.getAllByRole("listitem");
+    expect(items.map((li) => li.textContent)).toEqual([
+      "Wi-Fi\n\nOpen Settings.",
+      "Wi-Fi > Android\n\nOpen Quick Settings.",
+    ]);
+  });
+
+  it("warns when a previewed document would be rejected", async () => {
+    const user = await setup();
+    respond(200, {
+      status: "preview",
+      title: "Note",
+      cleanedContent: "Short.",
+      chunks: ["Note\n\nShort."],
+      cleaning: { originalChars: 20, cleanedChars: 6, boilerplateLinesRemoved: 0, duplicateBlocksRemoved: 0, sectionsMerged: 0 },
+      wouldReject: { reason: "Document has too little readable text after cleaning (5 characters; at least 100 needed)" },
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Web page URL" }));
+    await user.type(screen.getByLabelText("Page URL"), "https://example.com");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/ingest/url?preview=1");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "This would be rejected: Document has too little readable text after cleaning",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Cleaned: no boilerplate or duplicates found (20 → 6 characters).");
+  });
 });

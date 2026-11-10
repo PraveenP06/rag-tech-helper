@@ -1,5 +1,5 @@
 import { IngestError, type IngestErrorKind } from "./errors";
-import type { IngestResult } from "./types";
+import type { IngestResult, PreviewResult } from "./types";
 
 const STATUS_BY_KIND: Record<IngestErrorKind, number> = {
   validation: 400,
@@ -17,8 +17,18 @@ export function assertContentLength(request: Request, maxBytes: number): void {
   }
 }
 
-/** Runs an ingestion and turns its outcome into a JSON response with the right status code. */
-export async function ingestResponse(run: () => Promise<IngestResult>): Promise<Response> {
+/** `?preview=1` asks for a dry run: clean and chunk, but store nothing. */
+export function isPreviewRequest(request: Request): boolean {
+  return new URL(request.url).searchParams.get("preview") === "1";
+}
+
+/**
+ * Runs an ingestion (or preview) and turns its outcome into a JSON response with the right
+ * status code: 201 for newly ingested documents, 200 for duplicates and previews.
+ */
+export async function ingestResponse(
+  run: () => Promise<IngestResult | PreviewResult>,
+): Promise<Response> {
   try {
     const result = await run();
     return Response.json(result, { status: result.status === "ready" ? 201 : 200 });
