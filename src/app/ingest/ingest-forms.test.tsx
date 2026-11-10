@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IngestForms } from "./ingest-forms";
@@ -173,5 +173,150 @@ describe("IngestForms", () => {
       "This would be rejected: Document has too little readable text after cleaning",
     );
     expect(screen.getByRole("status")).toHaveTextContent("Cleaned: no boilerplate or duplicates found (20 → 6 characters).");
+  });
+});
+
+describe("IngestForms usability", () => {
+  const ready = { status: "ready", documentId: "doc-9", title: "Note", chunkCount: 2 };
+
+  async function pasteAndIngest(user: Awaited<ReturnType<typeof setup>>) {
+    await user.type(screen.getByLabelText("Title"), "Note");
+    await user.type(screen.getByLabelText("Content"), "Body text.");
+    await user.click(screen.getByRole("button", { name: "Ingest text" }));
+  }
+
+  it("links to the stored document and to chat after ingesting", async () => {
+    const user = await setup();
+    respond(201, ready);
+    await pasteAndIngest(user);
+
+    const status = await screen.findByRole("status");
+    expect(within(status).getByRole("link", { name: "View document" })).toHaveAttribute("href", "/documents/doc-9");
+    expect(within(status).getByRole("link", { name: "Ask about it in chat" })).toHaveAttribute("href", "/chat");
+  });
+
+  it("links to the existing document for duplicates", async () => {
+    const user = await setup();
+    respond(200, { status: "duplicate", documentId: "old-1", title: "Note", existingStatus: "ready" });
+    await pasteAndIngest(user);
+
+    const status = await screen.findByRole("status");
+    expect(within(status).getByRole("link", { name: "View document" })).toHaveAttribute("href", "/documents/old-1");
+  });
+
+  it("keeps what you typed when switching tabs", async () => {
+    const user = await setup();
+    await user.type(screen.getByLabelText("Content"), "Draft text");
+    await user.click(screen.getByRole("tab", { name: "Web page URL" }));
+    await user.type(screen.getByLabelText("Page URL"), "https://example.com");
+    await user.click(screen.getByRole("tab", { name: "Text or file" }));
+
+    expect(screen.getByLabelText("Content")).toHaveValue("Draft text");
+    await user.click(screen.getByRole("tab", { name: "Web page URL" }));
+    expect(screen.getByLabelText("Page URL")).toHaveValue("https://example.com");
+  });
+
+  it("switches tabs with the arrow keys", async () => {
+    const user = await setup();
+    await user.click(screen.getByRole("tab", { name: "Text or file" }));
+    await user.keyboard("{ArrowRight}");
+
+    const urlTab = screen.getByRole("tab", { name: "Web page URL" });
+    expect(urlTab).toHaveAttribute("aria-selected", "true");
+    expect(urlTab).toHaveFocus();
+    await user.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("tab", { name: "Text or file" })).toHaveFocus();
+  });
+
+  it("asks for a title before sending pasted text", async () => {
+    const user = await setup();
+    await user.type(screen.getByLabelText("Content"), "Body text.");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Add a title for pasted text.");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Title")).toHaveFocus();
+  });
+
+  it("explains the disabled text box and lets you remove a chosen file", async () => {
+    const user = await setup();
+    await user.upload(screen.getByLabelText(/Or upload a file/), new File(["# Guide"], "guide.md", { type: "text/markdown" }));
+
+    expect(screen.getByLabelText("Content")).toBeDisabled();
+    expect(screen.getByText(/Using guide\.md\. Remove the file to paste text instead\./)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Remove file" }));
+    expect(screen.getByLabelText("Content")).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Remove file" })).not.toBeInTheDocument();
+
+    respond(201, ready);
+    await pasteAndIngest(user);
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({ "content-type": "application/json", authorization: "Bearer k1" });
+  });
+
+  it("points at the key field when the key is rejected", async () => {
+    const user = await setup();
+    respond(401, { error: "Missing or invalid ingest API key" });
+    await pasteAndIngest(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The ingest API key wasn't accepted. Paste the full INGEST_API_KEY value from .env.local into the key field above.",
+    );
+  });
+
+  it("asks for the key before sending anything", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<IngestForms />);
+    await pasteAndIngest(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter the ingest API key first.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("can show the key to check it was pasted fully", async () => {
+    const user = await setup();
+    const key = screen.getByLabelText("Ingest API key");
+    expect(key).toHaveAttribute("type", "password");
+    await user.click(screen.getByRole("button", { name: "Show key" }));
+    expect(key).toHaveAttribute("type", "text");
+    await user.click(screen.getByRole("button", { name: "Hide key" }));
+    expect(key).toHaveAttribute("type", "password");
+  });
+
+  it("states the size limits and explains a too-large error plainly", async () => {
+    const user = await setup();
+    expect(screen.getByText(/up to 1 MB/)).toBeInTheDocument();
+    respond(413, { error: "Content is too large (limit 1000000 bytes)" });
+    await pasteAndIngest(user);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Too large: pasted text and files can be up to 1 MB.");
+
+    await user.click(screen.getByRole("tab", { name: "Web page URL" }));
+    expect(screen.getByText(/up to 2 MB/)).toBeInTheDocument();
+    respond(413, { error: "Page is too large (limit 2000000 bytes)" });
+    await user.type(screen.getByLabelText("Page URL"), "https://example.com/big");
+    await user.click(screen.getByRole("button", { name: "Ingest page" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("That page is too large: web pages can be up to 2 MB.");
+  });
+
+  it("adds https:// when the address has no scheme", async () => {
+    const user = await setup();
+    respond(201, ready);
+    await user.click(screen.getByRole("tab", { name: "Web page URL" }));
+    await user.type(screen.getByLabelText("Page URL"), "cyberseniors.org");
+    await user.click(screen.getByRole("button", { name: "Ingest page" }));
+
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ url: "https://cyberseniors.org" }));
+    expect(screen.getByLabelText("Page URL")).toHaveValue("https://cyberseniors.org");
+  });
+
+  it("clears the last result once you start editing", async () => {
+    const user = await setup();
+    respond(201, ready);
+    await pasteAndIngest(user);
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Content"), " More.");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });
