@@ -35,25 +35,29 @@ async function listSources(client: SupabaseClient): Promise<StoredSource[]> {
   }
 }
 
-export async function clearKnowledgeBase(client: SupabaseClient, index: Index) {
-  await index.documents.delete({ deleteAll: true });
+/**
+ * Marks every stored document pending (its chunks are about to be removed). The database rejects an
+ * UPDATE with no WHERE clause, so match every row explicitly. This runs before the index is cleared,
+ * so a failure here leaves the index untouched instead of half-reset.
+ */
+async function resetAllDocuments(client: SupabaseClient) {
   checked(
     await client.from("documents").update({
       status: "pending", chunk_count: 0, error: null, updated_at: new Date().toISOString(),
-    }),
+    }).not("id", "is", null),
     "knowledge base reset",
   );
 }
 
+export async function clearKnowledgeBase(client: SupabaseClient, index: Index) {
+  await resetAllDocuments(client);
+  await index.documents.delete({ deleteAll: true });
+}
+
 export async function reloadKnowledgeBase(client: SupabaseClient, index: Index) {
   const sources = await listSources(client);
+  await resetAllDocuments(client);
   await index.documents.delete({ deleteAll: true });
-  checked(
-    await client.from("documents").update({
-      status: "pending", chunk_count: 0, error: null, updated_at: new Date().toISOString(),
-    }),
-    "knowledge base reset",
-  );
   let reloaded = 0;
   const failures: Array<{ title: string; error: string }> = [];
 
