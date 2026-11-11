@@ -48,6 +48,13 @@ export type AnswerQuestionResult = {
 const systemPrompt =
   "Answer only from the provided context. Use simple plain language for older adults. Give short numbered steps. If the context does not answer the question, say you are not sure.";
 
+/**
+ * Lowest Pinecone score a chunk needs to be used as context. Calibrated on the live knowledge
+ * base: everyday phrasings of covered topics ("video call my grandson", "the words on my screen
+ * are too small") score about 0.4-0.5, while off-topic questions stay under 0.2.
+ */
+export const DEFAULT_MIN_SCORE = 0.4;
+
 const RELATIVE_SCORE_FLOOR = 0.8;
 
 const GREETING_OR_HELP_PHRASES = new Set([
@@ -162,8 +169,10 @@ const MEDICAL_MEDICINE_TERMS = [
 const medicalTerms = [...MEDICAL_CONDITION_TERMS, ...MEDICAL_MEDICINE_TERMS];
 const emergencyPattern = new RegExp(`\\b(?:${EMERGENCY_TERMS.join("|")})\\b`, "i");
 const medicalPattern = new RegExp(`\\b(?:${medicalTerms.join("|")})\\b`, "i");
-const medicalAdvicePattern =
-  /\b(?:should i take|can i take|stop taking|how much should i take|how much to take|is it safe to take|what should i)\b/i;
+// Phrases like "what should I do?" or "can I take a screenshot?" are everyday tech questions, so
+// advice phrasing only counts as medical alongside a medical term. Asking "how much to take" is
+// about dosing on its own.
+const medicalAdvicePattern = /\b(?:how much should i take|how much to take)\b/i;
 const reminderMedicalAdvicePattern =
   /\b(?:how much(?: should i)? take|should i take|can i take|stop taking|dose|dosage|safe to take|side effects?|what should i)\b/i;
 

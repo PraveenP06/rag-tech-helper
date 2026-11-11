@@ -5,7 +5,12 @@ import {
   type UsageLogInput,
   type UsageLogger,
 } from "@/lib/admin/usage-logger";
-import { answerQuestion, type GeneratedAnswer, type RetrievedChunk } from "@/lib/rag/answer";
+import {
+  answerQuestion,
+  DEFAULT_MIN_SCORE,
+  type GeneratedAnswer,
+  type RetrievedChunk,
+} from "@/lib/rag/answer";
 import { converseWithGemini, generateWithGemini } from "@/lib/rag/gemini-generator";
 import { retrieveFromPinecone } from "@/lib/rag/pinecone-retriever";
 
@@ -84,6 +89,6 @@ export const POST = createPostHandler({
   retrieve: retrieveFromPinecone,
   generate: generateWithGemini,
   converse: converseWithGemini,
-  minScore: 0.5,
+  minScore: DEFAULT_MIN_SCORE,
   logUsage: logUsageToSupabase,
 });

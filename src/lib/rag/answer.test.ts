@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_MIN_SCORE,
   EMERGENCY_MESSAGE,
   GREETING_MESSAGE,
   NOT_SURE_MESSAGE,
@@ -287,6 +288,58 @@ describe("answerQuestion", () => {
     expect(deps.retrieve).not.toHaveBeenCalled();
     expect(deps.generate).not.toHaveBeenCalled();
     expect(converse).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "I got a text saying my package is delayed. What should I do?",
+    "Someone called saying my computer has a virus. What should I do?",
+    "My alarm didn't go off this morning, what should I do?",
+    "Can I take a screenshot of a text message?",
+    "Should I take the software update now?",
+    "Is it safe to take my phone through airport security?",
+  ])("treats everyday tech questions with advice phrasing as tech questions: %s", async (question) => {
+    const deps = getDeps([getChunk()]);
+
+    const result = await answerQuestion({ question, ...deps });
+
+    expect(result.grounded).toBe(true);
+    expect(deps.retrieve).toHaveBeenCalledWith(question);
+    expect(deps.generate).toHaveBeenCalled();
+  });
+
+  it.each([
+    "I feel dizzy, what should I do?",
+    "Is it safe to take ibuprofen every day?",
+    "How much should I take?",
+  ])("still declines advice phrasing about health: %s", async (question) => {
+    const deps = getDeps([getChunk()]);
+
+    const result = await answerQuestion({ question, ...deps });
+
+    expect(result).toEqual({ grounded: false, answer: MEDICAL_REFUSAL_MESSAGE, sources: [] });
+    expect(deps.retrieve).not.toHaveBeenCalled();
+  });
+
+  describe("DEFAULT_MIN_SCORE", () => {
+    // Calibrated on the live knowledge base: everyday phrasings of covered topics score about
+    // 0.4-0.5, while off-topic questions stay under 0.2.
+    it("answers an everyday phrasing whose best guide match scores in the 0.4s", async () => {
+      const deps = { ...getDeps([getChunk({ score: 0.498 })]), minScore: DEFAULT_MIN_SCORE };
+
+      const result = await answerQuestion({ question: "How do I video call my grandson on my iPhone?", ...deps });
+
+      expect(result.grounded).toBe(true);
+      expect(deps.generate).toHaveBeenCalled();
+    });
+
+    it("does not answer from a weak match", async () => {
+      const deps = { ...getDeps([getChunk({ score: 0.3 })]), minScore: DEFAULT_MIN_SCORE };
+
+      const result = await answerQuestion({ question: "How do I connect my printer?", ...deps });
+
+      expect(result).toEqual({ grounded: false, answer: NOT_SURE_MESSAGE, sources: [] });
+      expect(deps.generate).not.toHaveBeenCalled();
+    });
   });
 
   it.each([
