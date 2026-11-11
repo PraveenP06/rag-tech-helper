@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  EMERGENCY_MESSAGE,
+  GREETING_MESSAGE,
   NOT_SURE_MESSAGE,
   MEDICAL_REFUSAL_MESSAGE,
   answerQuestion,
@@ -155,5 +157,205 @@ describe("answerQuestion", () => {
     const result = await answerQuestion({ question: "How do I call?", ...deps });
 
     expect(result.sources.map((source) => source.documentId)).toEqual(["doc-1", "doc-2"]);
+  });
+
+  it.each(["hi", "Hi!", "hello", "Hey there", "good morning", "hi!!", "  Hello  "])(
+    "greets the user and invites a question without searching or generating: %s",
+    async (message) => {
+      const deps = getDeps([getChunk()]);
+
+      const result = await answerQuestion({ question: message, ...deps });
+
+      expect(result).toEqual({ grounded: false, answer: GREETING_MESSAGE, sources: [] });
+      expect(deps.retrieve).not.toHaveBeenCalled();
+      expect(deps.generate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["help", "What can you do?", "how can you help me"])(
+    "explains what it can help with when asked for help: %s",
+    async (message) => {
+      const deps = getDeps([getChunk()]);
+
+      const result = await answerQuestion({ question: message, ...deps });
+
+      expect(result.answer).toBe(GREETING_MESSAGE);
+      expect(deps.generate).not.toHaveBeenCalled();
+    },
+  );
+
+  it("guides the user toward asking a question", () => {
+    expect(GREETING_MESSAGE).toMatch(/how can i help/i);
+    expect(GREETING_MESSAGE).toMatch(/video call|text bigger/i);
+  });
+
+  it("still answers a real question that starts with a greeting", async () => {
+    const deps = getDeps([getChunk()]);
+
+    const result = await answerQuestion({
+      question: "Hi, how do I video call my grandson?",
+      ...deps,
+    });
+
+    expect(result.grounded).toBe(true);
+    expect(deps.retrieve).toHaveBeenCalledOnce();
+  });
+
+  it("chats naturally when no guide matches and the message is conversational", async () => {
+    const deps = getDeps([]);
+    const converse = vi.fn<NonNullable<AnswerQuestionDependencies["converse"]>>(
+      async () => "You are welcome! Ask me anything about your phone or computer.",
+    );
+
+    const result = await answerQuestion({ question: "thanks so much!", ...deps, converse });
+
+    expect(result).toEqual({
+      grounded: false,
+      answer: "You are welcome! Ask me anything about your phone or computer.",
+      sources: [],
+    });
+    expect(converse).toHaveBeenCalledWith("thanks so much!");
+    expect(deps.generate).not.toHaveBeenCalled();
+  });
+
+  it("says it is not sure when no guide matches and the message is not conversational", async () => {
+    const deps = getDeps([getChunk({ score: 0.1 })]);
+    const converse = vi.fn<NonNullable<AnswerQuestionDependencies["converse"]>>(async () => undefined);
+
+    const result = await answerQuestion({
+      question: "How do I jailbreak my phone?",
+      ...deps,
+      converse,
+    });
+
+    expect(result).toEqual({ grounded: false, answer: NOT_SURE_MESSAGE, sources: [] });
+  });
+
+  it("answers from the guides without chatting when a guide matches", async () => {
+    const deps = getDeps([getChunk()]);
+    const converse = vi.fn<NonNullable<AnswerQuestionDependencies["converse"]>>(async () => "chat");
+
+    const result = await answerQuestion({ question: "How do I call?", ...deps, converse });
+
+    expect(result.grounded).toBe(true);
+    expect(converse).not.toHaveBeenCalled();
+  });
+
+  it("does not chat about medical questions", async () => {
+    const deps = getDeps([]);
+    const converse = vi.fn<NonNullable<AnswerQuestionDependencies["converse"]>>(async () => "chat");
+
+    const result = await answerQuestion({
+      question: "How much ibuprofen should I take?",
+      ...deps,
+      converse,
+    });
+
+    expect(result.answer).toBe(MEDICAL_REFUSAL_MESSAGE);
+    expect(converse).not.toHaveBeenCalled();
+  });
+
+  it("says it is not sure if the conversation reply fails", async () => {
+    const deps = getDeps([]);
+    const converse = vi.fn<NonNullable<AnswerQuestionDependencies["converse"]>>(async () => {
+      throw new Error("model overloaded");
+    });
+
+    const result = await answerQuestion({ question: "thanks!", ...deps, converse });
+
+    expect(result).toEqual({ grounded: false, answer: NOT_SURE_MESSAGE, sources: [] });
+  });
+
+  it.each([
+    "I have diabetes, what should I eat?",
+    "Is a blood sugar of 250 too high?",
+    "Can I take aspirin with my blood thinner?",
+    "My cholesterol medicine gives me side effects",
+    "I think I have asthma",
+    "What is a normal blood pressure for my age?",
+    "Should I stop taking my insulin?",
+    "I have arthritis, what helps with the pain?",
+    "do I have dementia",
+    "remind me to take my insulin, how much should I take?",
+  ])("declines broader medical questions without retrieving or generating: %s", async (question) => {
+    const deps = getDeps([getChunk()]);
+    const converse = vi.fn<NonNullable<AnswerQuestionDependencies["converse"]>>(async () => "chat");
+
+    const result = await answerQuestion({ question, ...deps, converse });
+
+    expect(result).toEqual({ grounded: false, answer: MEDICAL_REFUSAL_MESSAGE, sources: [] });
+    expect(deps.retrieve).not.toHaveBeenCalled();
+    expect(deps.generate).not.toHaveBeenCalled();
+    expect(converse).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "I have chest pain",
+    "I think I am having a heart attack",
+    "I can't breathe",
+    "I took too many pills, an overdose",
+    "I want to kill myself",
+  ])("points to emergency help for urgent situations: %s", async (question) => {
+    const deps = getDeps([getChunk()]);
+
+    const result = await answerQuestion({ question, ...deps });
+
+    expect(result).toEqual({ grounded: false, answer: EMERGENCY_MESSAGE, sources: [] });
+    expect(deps.retrieve).not.toHaveBeenCalled();
+    expect(deps.generate).not.toHaveBeenCalled();
+  });
+
+  it("tells people in an emergency to call 911 and offers the 988 crisis line", () => {
+    expect(EMERGENCY_MESSAGE).toMatch(/911/);
+    expect(EMERGENCY_MESSAGE).toMatch(/988/);
+  });
+
+  it.each([
+    "How do I call 911 on my iPhone?",
+    "How do I set a daily alarm to remind me to take my insulin?",
+    "How do I make the text bigger on my phone?",
+  ])("still helps with phone questions that touch on health or emergencies: %s", async (question) => {
+    const deps = getDeps([getChunk()]);
+
+    const result = await answerQuestion({ question, ...deps });
+
+    expect(result.grounded).toBe(true);
+    expect(deps.generate).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "I feel depressed and hopeless",
+    "I think I am depressed",
+    "I had a panic attack yesterday",
+  ])("treats mental health conditions as medical questions: %s", async (question) => {
+    const deps = getDeps([getChunk()]);
+
+    const result = await answerQuestion({ question, ...deps });
+
+    expect(result).toEqual({ grounded: false, answer: MEDICAL_REFUSAL_MESSAGE, sources: [] });
+    expect(deps.retrieve).not.toHaveBeenCalled();
+  });
+
+  it.each(["I have no reason to live", "everyone would be better off without me"])(
+    "points to emergency help when someone may be in crisis: %s",
+    async (question) => {
+      const deps = getDeps([getChunk()]);
+
+      const result = await answerQuestion({ question, ...deps });
+
+      expect(result).toEqual({ grounded: false, answer: EMERGENCY_MESSAGE, sources: [] });
+    },
+  );
+
+  it.each([
+    "I am hopeless with technology",
+    "I feel anxious every time my phone beeps, how do I turn off notifications?",
+    "I'm so frustrated with my tablet",
+  ])("does not mistake everyday frustration with technology for a crisis: %s", async (question) => {
+    const deps = getDeps([getChunk()]);
+
+    const result = await answerQuestion({ question, ...deps });
+
+    expect(result.grounded).toBe(true);
   });
 });

@@ -6,7 +6,7 @@ import {
   type UsageLogger,
 } from "@/lib/admin/usage-logger";
 import { answerQuestion, type GeneratedAnswer, type RetrievedChunk } from "@/lib/rag/answer";
-import { generateWithGemini } from "@/lib/rag/gemini-generator";
+import { converseWithGemini, generateWithGemini } from "@/lib/rag/gemini-generator";
 import { retrieveFromPinecone } from "@/lib/rag/pinecone-retriever";
 
 const questionSchema = z.object({ question: z.string().min(1).max(500) });
@@ -14,6 +14,7 @@ const questionSchema = z.object({ question: z.string().min(1).max(500) });
 export type ChatRouteDependencies = {
   readonly retrieve: (question: string) => Promise<readonly RetrievedChunk[]>;
   readonly generate: (prompt: GeneratedAnswer) => Promise<string>;
+  readonly converse?: (message: string) => Promise<string | undefined>;
   readonly minScore: number;
   readonly logUsage?: UsageLogger;
 };
@@ -22,7 +23,13 @@ export type ChatPostHandler = (request: Request) => Promise<Response>;
 
 const invalidRequest = (): Response => Response.json({ error: "Invalid question." }, { status: 400 });
 
-export const createPostHandler = ({ retrieve, generate, minScore, logUsage }: ChatRouteDependencies): ChatPostHandler =>
+export const createPostHandler = ({
+  retrieve,
+  generate,
+  converse,
+  minScore,
+  logUsage,
+}: ChatRouteDependencies): ChatPostHandler =>
   async (request) => {
     let body: unknown;
 
@@ -57,6 +64,7 @@ export const createPostHandler = ({ retrieve, generate, minScore, logUsage }: Ch
         question: parsedBody.data.question,
         retrieve,
         generate,
+        converse,
         minScore,
       });
       await recordUsage({
@@ -75,6 +83,7 @@ export const createPostHandler = ({ retrieve, generate, minScore, logUsage }: Ch
 export const POST = createPostHandler({
   retrieve: retrieveFromPinecone,
   generate: generateWithGemini,
+  converse: converseWithGemini,
   minScore: 0.5,
   logUsage: logUsageToSupabase,
 });

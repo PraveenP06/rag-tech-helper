@@ -10,7 +10,8 @@ const googleMocks = vi.hoisted(() => ({
 vi.mock("ai", () => ({ generateText: googleMocks.generateText }));
 vi.mock("@ai-sdk/google", () => ({ createGoogleGenerativeAI: googleMocks.createGoogle }));
 
-import { generateWithGemini } from "./gemini-generator";
+import { converseWithGemini, generateWithGemini } from "./gemini-generator";
+import { MEDICAL_REFUSAL_MESSAGE } from "./answer";
 
 describe("generateWithGemini", () => {
   beforeEach(() => {
@@ -104,5 +105,71 @@ describe("generateWithGemini", () => {
     ).rejects.toThrow("Unable to generate an answer with Gemini.");
 
     expect(googleMocks.model).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("converseWithGemini", () => {
+  beforeEach(() => {
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
+    delete process.env.GEMINI_MODEL;
+    googleMocks.generateText.mockReset();
+    googleMocks.model.mockReset();
+    googleMocks.createGoogle.mockReset();
+    googleMocks.model.mockReturnValue(googleMocks.modelValue);
+    googleMocks.createGoogle.mockReturnValue(googleMocks.model);
+  });
+
+  it("uses Gemini to reply to conversational messages", async () => {
+    googleMocks.generateText.mockResolvedValue({ text: "  You’re welcome. What tech question can I help with?  " });
+
+    await expect(converseWithGemini("thanks!")).resolves.toBe(
+      "You’re welcome. What tech question can I help with?",
+    );
+
+    expect(googleMocks.createGoogle).toHaveBeenCalledWith({ apiKey: "test-key" });
+    expect(googleMocks.model).toHaveBeenCalledWith("gemini-3.1-flash-lite");
+    expect(googleMocks.generateText).toHaveBeenCalledWith({
+      model: googleMocks.modelValue,
+      system: expect.stringMatching(/friendly assistant/i),
+      prompt: "thanks!",
+      maxRetries: 1,
+    });
+  });
+
+  it.each(["", "  ", "not_conversation", "NOT_CONVERSATION"]) (
+    "returns undefined when Gemini identifies a non-conversational message: %s",
+    async (text) => {
+      googleMocks.generateText.mockResolvedValue({ text });
+
+      await expect(converseWithGemini("How do I call someone?")).resolves.toBeUndefined();
+    },
+  );
+
+  it.each(["MEDICAL", "  medical  "])(
+    "returns the medical refusal when Gemini identifies a medical message: %s",
+    async (text) => {
+      googleMocks.generateText.mockResolvedValue({ text });
+
+      await expect(converseWithGemini("Can I take this medicine?")).resolves.toBe(
+        MEDICAL_REFUSAL_MESSAGE,
+      );
+
+      expect(googleMocks.generateText).toHaveBeenCalledWith(
+        expect.objectContaining({ system: expect.stringMatching(/reply with exactly medical/i) }),
+      );
+    },
+  );
+
+  it("uses the fallback model after a transient error", async () => {
+    googleMocks.generateText
+      .mockRejectedValueOnce(Object.assign(new Error("high demand"), { status: 503 }))
+      .mockResolvedValueOnce({ text: "Goodbye! Ask me a tech question anytime." });
+
+    await expect(converseWithGemini("goodbye")).resolves.toBe(
+      "Goodbye! Ask me a tech question anytime.",
+    );
+
+    expect(googleMocks.model).toHaveBeenNthCalledWith(1, "gemini-3.1-flash-lite");
+    expect(googleMocks.model).toHaveBeenNthCalledWith(2, "gemini-3.6-flash");
   });
 });
