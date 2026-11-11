@@ -1,13 +1,17 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 
-import type { GeneratedAnswer } from "./answer";
+import { MEDICAL_REFUSAL_MESSAGE, type GeneratedAnswer } from "./answer";
 
 export type GeminiGenerator = (prompt: GeneratedAnswer) => Promise<string>;
 
 const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 const FALLBACK_MODEL = "gemini-3.6-flash";
 const MODEL_FAILURE_MESSAGE = "Unable to generate an answer with Gemini.";
+const NOT_CONVERSATION = "NOT_CONVERSATION";
+const MEDICAL = "MEDICAL";
+const conversationSystemPrompt =
+  "You are Tech Helper, a friendly assistant that helps older adults with phones, tablets and computers. If the user's message is about health, a medical condition, symptoms, medication, or dosing, reply with exactly MEDICAL. If the user message is small talk, thanks, goodbye, a feeling, who are you, or what can you do, reply in at most two short, warm, plain-language sentences and invite them to ask a tech question. Never give technical instructions, device steps, or medical advice in this mode. If the message is a request for help with a device, app, account or any task, reply with exactly NOT_CONVERSATION.";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -61,9 +65,8 @@ const requireApiKey = (): string => {
   return apiKey;
 };
 
-export const generateWithGemini: GeminiGenerator = async ({ system, context, question }) => {
+const generateTextWithGemini = async (system: string, prompt: string): Promise<string> => {
   const google = createGoogleGenerativeAI({ apiKey: requireApiKey() });
-  const prompt = `Context:\n${context}\n\nQuestion:\n${question}`;
 
   for (const modelName of getModelNames(process.env.GEMINI_MODEL)) {
     try {
@@ -83,4 +86,17 @@ export const generateWithGemini: GeminiGenerator = async ({ system, context, que
   }
 
   throw new Error(MODEL_FAILURE_MESSAGE);
+};
+
+export const generateWithGemini: GeminiGenerator = async ({ system, context, question }) =>
+  generateTextWithGemini(system, `Context:\n${context}\n\nQuestion:\n${question}`);
+
+export const converseWithGemini = async (message: string): Promise<string | undefined> => {
+  const text = (await generateTextWithGemini(conversationSystemPrompt, message)).trim();
+
+  if (text.toLowerCase() === MEDICAL.toLowerCase()) {
+    return MEDICAL_REFUSAL_MESSAGE;
+  }
+
+  return text && text.toLowerCase() !== NOT_CONVERSATION.toLowerCase() ? text : undefined;
 };

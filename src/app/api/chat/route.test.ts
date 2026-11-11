@@ -43,6 +43,22 @@ describe("POST /api/chat", () => {
     expect(errorSpy).toHaveBeenCalledOnce();
     errorSpy.mockRestore();
   });
+
+  it("passes the optional conversation dependency through to answering", async () => {
+    const converse = vi.fn(async (): Promise<string | undefined> => "You’re welcome!");
+    const handler = createPostHandler({
+      retrieve: vi.fn(async () => []),
+      generate: vi.fn(),
+      converse,
+      minScore: 0.5,
+    });
+
+    const response = await handler(requestFor({ question: "thanks!" }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ answer: "You’re welcome!" });
+    expect(converse).toHaveBeenCalledWith("thanks!");
+  });
 });
 
 describe("POST /api/chat usage logging", () => {
