@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+
+import { HomeLink } from "../home-link";
 import { ChatUI } from "./chat-ui";
 
 export const metadata: Metadata = {
@@ -11,6 +13,7 @@ export default function ChatPage() {
     <div className="flex flex-1 justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex w-full max-w-2xl flex-1 flex-col bg-white dark:bg-black">
         <header className="flex flex-col gap-1 border-b border-black/10 px-4 py-6 dark:border-white/15 sm:px-8">
+          <HomeLink />
           <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
             Tech Helper Chat
           </h1>
