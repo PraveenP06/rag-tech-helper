@@ -8,16 +8,25 @@ export const metadata: Metadata = {
 
 // Matches the guides in the knowledge base; update it when topics are added or removed.
 const TOPICS = [
+  "Setting up a new phone",
   "Making text bigger",
   "Video calls with family",
+  "Texting and sending photos",
+  "Checking voicemail",
   "Connecting to Wi-Fi",
   "Pairing Bluetooth headphones",
-  "Taking a screenshot",
+  "Downloading apps",
   "Updating your phone",
+  "Fixing a frozen or slow phone",
+  "Finding a lost phone",
+  "Forgotten passcodes and passwords",
+  "Backing up photos",
+  "Taking a screenshot",
   "Setting alarms",
   "Calling for help in an emergency",
   "Blocking unwanted calls",
   "Spotting scams",
+  "Staying safe on public Wi-Fi",
   "Making strong passwords",
 ] as const;
 
