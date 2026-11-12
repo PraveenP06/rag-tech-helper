@@ -3,10 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IngestError } from "@/lib/ingest/errors";
 
 const ingestDocument = vi.hoisted(() => vi.fn());
+const replaceDocument = vi.hoisted(() => vi.fn());
 const fromUrl = vi.hoisted(() => vi.fn());
 const previewDocument = vi.hoisted(() => vi.fn());
 const createIngestDeps = vi.hoisted(() => vi.fn(() => ({ fake: true })));
-vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument, previewDocument }));
+vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument, replaceDocument, previewDocument }));
 vi.mock("@/lib/ingest/sources/url", () => ({ fromUrl }));
 vi.mock("@/lib/ingest/deps", () => ({ createIngestDeps }));
 
@@ -24,6 +25,7 @@ beforeEach(() => {
   ingestDocument
     .mockReset()
     .mockResolvedValue({ status: "ready", documentId: "d", title: "X", chunkCount: 1 });
+  replaceDocument.mockReset().mockResolvedValue({ status: "ready", documentId: "d", title: "X", chunkCount: 1 });
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -43,6 +45,14 @@ describe("POST /api/ingest/url", () => {
     expect(res.status).toBe(201);
     expect(fromUrl).toHaveBeenCalledWith({ url: "https://x.dev" });
     expect(ingestDocument).toHaveBeenCalledWith(raw, { fake: true });
+  });
+
+  it("updates an existing document when documentId is supplied", async () => {
+    const id = "868d1b2a-a7e1-4104-8a21-625be9cd1de9";
+    const res = await post(JSON.stringify({ documentId: id, url: "https://x.dev" }));
+    expect(res.status).toBe(201);
+    expect(replaceDocument).toHaveBeenCalledWith(id, raw, { fake: true });
+    expect(ingestDocument).not.toHaveBeenCalled();
   });
 
   it("returns the scraper's error status", async () => {

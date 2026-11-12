@@ -29,6 +29,8 @@ Content gets into the knowledge base in two ways. Both feed the same pipeline: *
 | Direct upload | `POST /api/ingest/text` | JSON `{ "title", "content" }`, or multipart `file` (`.md`, `.markdown`, `.txt`, ≤ 1 MB) with an optional `title` |
 | Web page scraping | `POST /api/ingest/url` | JSON `{ "url" }` for a single public `http(s)` page (HTML, plain text or markdown, ≤ 2 MB) |
 
+To update an existing source instead of adding a new dataset entry, include its Supabase document id as `documentId` in either request. The existing document id and citation links are preserved while its stored text and Pinecone chunks are replaced. The id is shown after a successful ingest and can also be found at `/documents/<id>`.
+
 There's also a developer page at [`/ingest`](http://localhost:3000/ingest) with a form for each method.
 
 ### Admin knowledge base controls
