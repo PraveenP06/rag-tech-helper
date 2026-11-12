@@ -48,6 +48,19 @@ describe("createDocumentRepo", () => {
     await expect(createDocumentRepo(client).findByHash("h")).resolves.toBeNull();
   });
 
+  it("findById returns the stored document", async () => {
+    const { client, calls } = fakeSupabase({
+      data: { id: "d1", title: "T", status: "ready" },
+      error: null,
+    });
+    await expect(createDocumentRepo(client).findById("d1")).resolves.toEqual({
+      id: "d1",
+      title: "T",
+      status: "ready",
+    });
+    expect(calls).toContainEqual(["eq", "id", "d1"]);
+  });
+
   it("createPending inserts a pending row with snake_case columns", async () => {
     const { client, calls } = fakeSupabase({ data: { id: "new" }, error: null });
     const repo = createDocumentRepo(client);
@@ -97,6 +110,31 @@ describe("createDocumentRepo", () => {
       "update",
       expect.objectContaining({ status: "pending", chunk_count: 0, error: null }),
     ]);
+  });
+
+  it("updatePending replaces the source fields and resets status", async () => {
+    const { client, calls } = fakeSupabase({ data: null, error: null });
+    await createDocumentRepo(client).updatePending("d1", {
+      sourceType: "url",
+      sourceRef: "https://example.com/updated",
+      title: "Updated",
+      contentHash: "new-hash",
+      content: "Updated content",
+    });
+    expect(calls).toContainEqual([
+      "update",
+      expect.objectContaining({
+        source_type: "url",
+        source_ref: "https://example.com/updated",
+        title: "Updated",
+        content_hash: "new-hash",
+        content: "Updated content",
+        status: "pending",
+        chunk_count: 0,
+        error: null,
+      }),
+    ]);
+    expect(calls).toContainEqual(["eq", "id", "d1"]);
   });
 
   it("surfaces Supabase errors", async () => {

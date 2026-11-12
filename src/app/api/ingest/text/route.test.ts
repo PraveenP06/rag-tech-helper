@@ -2,9 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ingestDocument = vi.hoisted(() => vi.fn());
+const replaceDocument = vi.hoisted(() => vi.fn());
 const previewDocument = vi.hoisted(() => vi.fn());
 const createIngestDeps = vi.hoisted(() => vi.fn(() => ({ fake: true })));
-vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument, previewDocument }));
+vi.mock("@/lib/ingest/pipeline", () => ({ ingestDocument, replaceDocument, previewDocument }));
 vi.mock("@/lib/ingest/deps", () => ({ createIngestDeps }));
 
 import { POST } from "./route";
@@ -18,6 +19,7 @@ beforeEach(() => {
   previewDocument.mockReset().mockReturnValue(preview);
   createIngestDeps.mockClear();
   ingestDocument.mockReset().mockResolvedValue(ready);
+  replaceDocument.mockReset().mockResolvedValue(ready);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -50,6 +52,20 @@ describe("POST /api/ingest/text", () => {
     const res = await post(form);
     expect(res.status).toBe(201);
     expect(ingestDocument.mock.calls[0][0]).toMatchObject({ sourceRef: "guide.md", title: "Guide" });
+  });
+
+  it("updates an existing document when documentId is supplied", async () => {
+    const id = "868d1b2a-a7e1-4104-8a21-625be9cd1de9";
+    const res = await post(JSON.stringify({ documentId: id, title: "Updated", content: "Hello" }), {
+      "content-type": "application/json",
+    });
+    expect(res.status).toBe(201);
+    expect(replaceDocument).toHaveBeenCalledWith(
+      id,
+      { sourceType: "upload", sourceRef: "pasted-text", title: "Updated", content: "Hello" },
+      { fake: true },
+    );
+    expect(ingestDocument).not.toHaveBeenCalled();
   });
 
   it("rejects a multipart request without a file", async () => {

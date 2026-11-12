@@ -33,6 +33,18 @@ export function createDocumentRepo(client: SupabaseClient): DocumentRepo {
       return (data as StoredDocument | null) ?? null;
     },
 
+    async findById(id) {
+      const data = check(
+        await client
+          .from(TABLE)
+          .select("id, title, status")
+          .eq("id", id)
+          .maybeSingle(),
+        "lookup",
+      );
+      return (data as StoredDocument | null) ?? null;
+    },
+
     async createPending({ sourceType, sourceRef, title, contentHash, content }) {
       const data = check(
         await client
@@ -51,6 +63,18 @@ export function createDocumentRepo(client: SupabaseClient): DocumentRepo {
       );
       return { id: (data as { id: string }).id };
     },
+
+    updatePending: (id, { sourceType, sourceRef, title, contentHash, content }) =>
+      update(id, {
+        source_type: sourceType,
+        source_ref: sourceRef,
+        title,
+        content_hash: contentHash,
+        content,
+        status: "pending",
+        chunk_count: 0,
+        error: null,
+      }, "update"),
 
     markPending: (id) => update(id, { status: "pending", chunk_count: 0, error: null }, "update"),
     markReady: (id, chunkCount) =>

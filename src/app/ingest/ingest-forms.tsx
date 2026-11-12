@@ -193,6 +193,7 @@ function Buttons({ pending, run, label }: { pending: Action | null; run: (a: Act
 function TextForm({ apiKey }: { apiKey: string }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [documentId, setDocumentId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
@@ -202,15 +203,18 @@ function TextForm({ apiKey }: { apiKey: string }) {
       const form = new FormData();
       form.set("file", file);
       if (title.trim()) form.set("title", title);
+      if (documentId.trim()) form.set("documentId", documentId.trim());
       return { init: { method: "POST", headers: authHeader(apiKey), body: form } };
     }
     if (!title.trim()) return { error: "Add a title for pasted text.", focus: titleRef.current };
     if (!content.trim()) return { error: "Paste some text or choose a file.", focus: contentRef.current };
+    const body: { title: string; content: string; documentId?: string } = { title, content };
+    if (documentId.trim()) body.documentId = documentId.trim();
     return {
       init: {
         method: "POST",
         headers: { "content-type": "application/json", ...authHeader(apiKey) },
-        body: JSON.stringify({ title, content }),
+        body: JSON.stringify(body),
       },
     };
   });
@@ -288,6 +292,17 @@ function TextForm({ apiKey }: { apiKey: string }) {
         </div>
         <p className={hintClass}>Pasted text and files can be up to 1 MB.</p>
       </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="ingest-document-id" className="text-sm font-medium">Existing document ID (optional)</label>
+        <input
+          id="ingest-document-id"
+          className={inputClass}
+          placeholder="Leave blank to add a new source"
+          value={documentId}
+          onChange={(e) => setDocumentId(e.target.value)}
+        />
+        <p className="text-xs text-zinc-500">Provide an existing ID to replace that source and preserve its citations.</p>
+      </div>
       <Buttons pending={pending} run={run} label="Ingest text" />
       <OutcomeView outcome={outcome} />
     </form>
@@ -302,16 +317,19 @@ const withScheme = (raw: string) => {
 
 function UrlForm({ apiKey }: { apiKey: string }) {
   const [url, setUrl] = useState("");
+  const [documentId, setDocumentId] = useState("");
   const urlRef = useRef<HTMLInputElement>(null);
   const { pending, outcome, run, clearOutcome } = useSubmit("/api/ingest/url", apiKey, PAGE_TOO_LARGE, () => {
     const address = withScheme(url);
     if (!address) return { error: "Enter a web page address.", focus: urlRef.current };
     setUrl(address);
+    const body: { url: string; documentId?: string } = { url: address };
+    if (documentId.trim()) body.documentId = documentId.trim();
     return {
       init: {
         method: "POST",
         headers: { "content-type": "application/json", ...authHeader(apiKey) },
-        body: JSON.stringify({ url: address }),
+        body: JSON.stringify(body),
       },
     };
   });
@@ -340,6 +358,20 @@ function UrlForm({ apiKey }: { apiKey: string }) {
           }}
         />
         <p className={hintClass}>Fetches one public page (up to 2 MB) and keeps its main text.</p>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="ingest-url-document-id" className="text-sm font-medium">Existing document ID (optional)</label>
+        <input
+          id="ingest-url-document-id"
+          className={inputClass}
+          placeholder="Leave blank to add a new source"
+          value={documentId}
+          onChange={(e) => {
+            setDocumentId(e.target.value);
+            clearOutcome();
+          }}
+        />
+        <p className="text-xs text-zinc-500">Provide an existing ID to replace that source and preserve its citations.</p>
       </div>
       <Buttons pending={pending} run={run} label="Ingest page" />
       <OutcomeView outcome={outcome} />

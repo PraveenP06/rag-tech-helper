@@ -45,6 +45,7 @@ export interface ChunkDocument {
 
 export interface DocumentRepo {
   findByHash(contentHash: string): Promise<StoredDocument | null>;
+  findById(id: string): Promise<StoredDocument | null>;
   createPending(input: {
     sourceType: SourceType;
     sourceRef: string;
@@ -52,6 +53,14 @@ export interface DocumentRepo {
     contentHash: string;
     content: string;
   }): Promise<{ id: string }>;
+  /** Replaces a source's stored content before its chunks are rebuilt. */
+  updatePending(id: string, input: {
+    sourceType: SourceType;
+    sourceRef: string;
+    title: string;
+    contentHash: string;
+    content: string;
+  }): Promise<void>;
   /** Puts a previously failed document back into `pending` before a retry. */
   markPending(id: string): Promise<void>;
   markReady(id: string, chunkCount: number): Promise<void>;

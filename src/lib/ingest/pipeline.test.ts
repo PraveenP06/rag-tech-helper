@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { IngestError } from "./errors";
 import { contentHash } from "./hash";
-import { ingestDocument, previewDocument } from "./pipeline";
+import { ingestDocument, previewDocument, replaceDocument } from "./pipeline";
 import type { DocumentRepo, IngestDeps, RawDocument, StoredDocument } from "./types";
 
 const raw: RawDocument = {
@@ -15,7 +15,9 @@ const raw: RawDocument = {
 function fakeDeps(existing: StoredDocument | null = null) {
   const docs = {
     findByHash: vi.fn<DocumentRepo["findByHash"]>().mockResolvedValue(existing),
+    findById: vi.fn<DocumentRepo["findById"]>().mockResolvedValue(existing),
     createPending: vi.fn<DocumentRepo["createPending"]>().mockResolvedValue({ id: "doc-1" }),
+    updatePending: vi.fn<DocumentRepo["updatePending"]>().mockResolvedValue(),
     markPending: vi.fn<DocumentRepo["markPending"]>().mockResolvedValue(),
     markReady: vi.fn<DocumentRepo["markReady"]>().mockResolvedValue(),
     markFailed: vi.fn<DocumentRepo["markFailed"]>().mockResolvedValue(),
@@ -205,5 +207,38 @@ describe("previewDocument", () => {
     expect(previewDocument({ ...raw, content: "Copy" }).wouldReject).toEqual({
       reason: "Document has no text content to ingest",
     });
+  });
+});
+
+describe("replaceDocument", () => {
+  it("reindexes updated content under the existing document id", async () => {
+    const deps = fakeDeps({ id: "old", title: "Old notes", status: "ready" });
+    const updated = { ...raw, title: "Updated notes", content: raw.content.replaceAll("routing", "navigation") };
+
+    const result = await replaceDocument("old", updated, deps);
+
+    expect(deps.docs.updatePending).toHaveBeenCalledWith("old", expect.objectContaining({
+      title: "Updated notes",
+      content: updated.content,
+      contentHash: contentHash(updated.content),
+    }));
+    expect(deps.upsertChunks.mock.calls[0][0][0]).toMatchObject({
+      _id: "old#0",
+      title: "Updated notes",
+      document_id: "old",
+      source_url: "/documents/old",
+    });
+    expect(deps.deleteStaleChunks).toHaveBeenCalledWith("old", expect.any(Number));
+    expect(result).toMatchObject({ status: "ready", documentId: "old", title: "Updated notes" });
+  });
+
+  it("rejects an unknown document id", async () => {
+    const deps = fakeDeps();
+    await expect(replaceDocument("missing", raw, deps)).rejects.toMatchObject({
+      kind: "validation",
+      message: "Document to update was not found",
+    });
+    expect(deps.docs.updatePending).not.toHaveBeenCalled();
+    expect(deps.upsertChunks).not.toHaveBeenCalled();
   });
 });

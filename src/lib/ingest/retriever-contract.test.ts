@@ -24,7 +24,9 @@ describe("ingestion ↔ retrieval contract", () => {
     const deps: IngestDeps = {
       docs: {
         findByHash: async () => null,
+        findById: async () => null,
         createPending: async () => ({ id: "doc-9" }),
+        updatePending: async () => {},
         markPending: async () => {},
         markReady: async () => {},
         markFailed: async () => {},
