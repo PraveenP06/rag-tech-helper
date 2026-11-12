@@ -35,7 +35,7 @@ There's also a developer page at [`/ingest`](http://localhost:3000/ingest) with 
 
 ### Admin knowledge base controls
 
-The [`/admin`](http://localhost:3000/admin) page includes controls to clear the chatbot's Pinecone namespace or reload it from the source documents and text retained in Supabase. Both actions require the same `INGEST_API_KEY` entered on the page. Clear keeps source documents but resets their status and chunk count; reload rebuilds the index from those saved sources. Reload starts by clearing the namespace, so a partial failure can leave some sources unindexed; the page reports which documents failed so they can be corrected and reloaded again.
+The [`/admin`](http://localhost:3000/admin) page includes usage logs and controls to clear the chatbot's Pinecone namespace or reload it from the source documents and text retained in Supabase. Enter the `INGEST_API_KEY` on the page to load usage logs or use either knowledge-base action; the key is kept in this browser tab only. The usage API requires this key too. Clear keeps source documents but resets their status and chunk count; reload rebuilds the index from those saved sources. Reload starts by clearing the namespace, so a partial failure can leave some sources unindexed; the page reports which documents failed so they can be corrected and reloaded again.
 
 Both endpoints require `Authorization: Bearer <INGEST_API_KEY>`. The `/ingest` page has a field for the key and keeps it in session storage. If `INGEST_API_KEY` isn't set on the server, the endpoints return `503` instead of accepting requests without a key.
 
