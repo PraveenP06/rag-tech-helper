@@ -1,34 +1,18 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-
-const KEY_STORAGE = "ingest-api-key";
-const KEY_EVENT = "ingest-api-key-change";
+import { useState } from "react";
+import { saveAdminKey, useAdminKey } from "./admin-key";
 const inputClass =
   "w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 " +
   "focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:border-white/15 dark:bg-zinc-900 dark:text-zinc-100";
 
-function subscribe(onChange: () => void) {
-  window.addEventListener(KEY_EVENT, onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    window.removeEventListener(KEY_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
 export function KnowledgeBaseControls() {
-  const apiKey = useSyncExternalStore(
-    subscribe,
-    () => sessionStorage.getItem(KEY_STORAGE) ?? "",
-    () => "",
-  );
+  const apiKey = useAdminKey();
   const [pending, setPending] = useState<"clear" | "reload" | null>(null);
   const [feedback, setFeedback] = useState<{ error: boolean; message: string } | null>(null);
 
   const saveKey = (value: string) => {
-    sessionStorage.setItem(KEY_STORAGE, value);
-    window.dispatchEvent(new Event(KEY_EVENT));
+    saveAdminKey(value);
   };
 
   const run = async (action: "clear" | "reload") => {
