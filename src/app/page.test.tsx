@@ -26,12 +26,12 @@ describe("Home", () => {
     }
   });
 
-  it("keeps the team pages in a quiet footer", () => {
+  it("has buttons to the team pages at the top", () => {
     render(<Home />);
 
-    const footer = within(screen.getByRole("contentinfo"));
-    expect(footer.getByRole("link", { name: "Add guides" })).toHaveAttribute("href", "/ingest");
-    expect(footer.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/admin");
+    const team = within(screen.getByRole("navigation", { name: "Team pages" }));
+    expect(team.getByRole("link", { name: "Add guides" })).toHaveAttribute("href", "/ingest");
+    expect(team.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
   });
 
   it("has a real page title", () => {

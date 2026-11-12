@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { getUsageOverview } from "@/lib/admin/usage-store";
 import { getUsageSupabaseClient } from "@/lib/admin/supabase";
+import { HomeLink } from "../home-link";
 import { KnowledgeBaseControls } from "./knowledge-base-controls";
 
 const easternDateTime = new Intl.DateTimeFormat("en-US", {
@@ -17,6 +18,7 @@ const easternDateTime = new Intl.DateTimeFormat("en-US", {
 export default function AdminUsagePage() {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-8 px-6 py-12">
+      <HomeLink />
       <KnowledgeBaseControls />
       <Suspense
         fallback={

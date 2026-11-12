@@ -21,11 +21,24 @@ const TOPICS = [
   "Making strong passwords",
 ] as const;
 
+const TEAM_BUTTON =
+  "rounded-lg border border-black/15 px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:border-white/20 dark:text-zinc-300 dark:hover:bg-zinc-900";
+
 export default function Home() {
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex w-full max-w-2xl flex-1 flex-col gap-10 bg-white px-6 py-14 dark:bg-black sm:px-10">
-        <header className="flex flex-col gap-4">
+        <nav aria-label="Team pages" className="flex items-center justify-end gap-2 text-sm">
+          <span className="mr-1 text-zinc-500 dark:text-zinc-400">Team:</span>
+          <Link href="/ingest" className={TEAM_BUTTON}>
+            Add guides
+          </Link>
+          <Link href="/admin" className={TEAM_BUTTON}>
+            Admin
+          </Link>
+        </nav>
+
+        <header className="-mt-4 flex flex-col gap-4">
           <h1 className="text-4xl font-semibold tracking-tight text-black dark:text-zinc-50">Tech Helper</h1>
           <p className="text-xl leading-relaxed text-zinc-700 dark:text-zinc-300">
             Ask a question about your phone, tablet or computer in your own words. You&apos;ll get
@@ -55,16 +68,6 @@ export default function Home() {
             ))}
           </ul>
         </section>
-
-        <footer className="mt-auto flex flex-wrap gap-x-4 gap-y-1 border-t border-black/10 pt-6 text-sm text-zinc-500 dark:border-white/15 dark:text-zinc-400">
-          <span>For the team:</span>
-          <Link href="/ingest" className="underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200">
-            Add guides
-          </Link>
-          <Link href="/admin" className="underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200">
-            Dashboard
-          </Link>
-        </footer>
       </main>
     </div>
   );
