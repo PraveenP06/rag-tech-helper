@@ -1,5 +1,71 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "RAG Tech Helper",
+  description: "Plain-language, step-by-step help with phones, tablets and computers",
+};
+
+// Matches the guides in the knowledge base; update it when topics are added or removed.
+const TOPICS = [
+  "Making text bigger",
+  "Video calls with family",
+  "Connecting to Wi-Fi",
+  "Pairing Bluetooth headphones",
+  "Taking a screenshot",
+  "Updating your phone",
+  "Setting alarms",
+  "Calling for help in an emergency",
+  "Blocking unwanted calls",
+  "Spotting scams",
+  "Making strong passwords",
+] as const;
 
 export default function Home() {
-  redirect("/chat");
+  return (
+    <div className="flex flex-1 justify-center bg-zinc-50 font-sans dark:bg-black">
+      <main className="flex w-full max-w-2xl flex-1 flex-col gap-10 bg-white px-6 py-14 dark:bg-black sm:px-10">
+        <header className="flex flex-col gap-4">
+          <h1 className="text-4xl font-semibold tracking-tight text-black dark:text-zinc-50">Tech Helper</h1>
+          <p className="text-xl leading-relaxed text-zinc-700 dark:text-zinc-300">
+            Ask a question about your phone, tablet or computer in your own words. You&apos;ll get
+            plain-language, step-by-step help from trusted guides.
+          </p>
+        </header>
+
+        <Link
+          href="/chat"
+          className="flex min-h-16 items-center justify-center rounded-xl bg-blue-700 px-8 text-2xl font-semibold text-white hover:bg-blue-800 focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-blue-700 dark:bg-blue-500 dark:text-black dark:hover:bg-blue-400 sm:self-start"
+        >
+          Ask a question
+        </Link>
+
+        <section className="flex flex-col gap-4">
+          <h2 id="topics" className="text-2xl font-semibold text-black dark:text-zinc-50">
+            Things I can help with
+          </h2>
+          <ul aria-labelledby="topics" className="grid gap-x-6 gap-y-3 text-lg text-zinc-800 dark:text-zinc-200 sm:grid-cols-2">
+            {TOPICS.map((topic) => (
+              <li key={topic} className="flex gap-3">
+                <span aria-hidden="true" className="text-blue-700 dark:text-blue-400">
+                  •
+                </span>
+                {topic}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <footer className="mt-auto flex flex-wrap gap-x-4 gap-y-1 border-t border-black/10 pt-6 text-sm text-zinc-500 dark:border-white/15 dark:text-zinc-400">
+          <span>For the team:</span>
+          <Link href="/ingest" className="underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200">
+            Add guides
+          </Link>
+          <Link href="/admin" className="underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200">
+            Dashboard
+          </Link>
+        </footer>
+      </main>
+    </div>
+  );
 }
